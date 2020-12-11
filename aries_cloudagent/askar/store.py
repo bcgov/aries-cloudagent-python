@@ -1,3 +1,5 @@
+"""Aries-Askar backend store configuration."""
+
 import json
 import logging
 import urllib
@@ -50,7 +52,7 @@ class AskarStoreConfig:
         self.storage_creds = config.get("storage_creds", None)
 
         storage_type = config.get("storage_type")
-        if storage_type == "default":
+        if not storage_type or storage_type == "default":
             storage_type = "sqlite"
         elif storage_type == "postgres_storage":
             storage_type = "postgres"
@@ -177,6 +179,7 @@ class AskarOpenStore:
 
     @property
     def name(self) -> str:
+        """Accessor for the store name."""
         return self.config.name
 
     async def close(self):
