@@ -867,7 +867,7 @@ class DemoAgent:
             database=self.wallet_name,
         )
 
-        tables = ("items", "tags_encrypted", "tags_plaintext")
+        tables = self._postgres_tables
         for t in tables:
             await conn.execute(f"VACUUM FULL {t}" if vacuum_full else f"VACUUM {t}")
 
@@ -895,21 +895,23 @@ class DemoAgent:
     def format_postgres_stats(self):
         if not self.wallet_stats:
             return
-        yield "{:30} | {:>17} | {:>17} | {:>17}".format(
-            f"{self.wallet_name} DB", "items", "tags_encrypted", "tags_plaintext"
+        tables = self._postgres_tables
+        yield ("{:30}" + " | {:>17}" * len(tables)).format(
+            f"{self.wallet_name} DB", *tables
         )
         yield "=" * 90
         for ident, stats in self.wallet_stats:
-            yield "{:30} | {:8d} {:>8} | {:8d} {:>8} | {:8d} {:>8}".format(
-                ident,
-                stats["items"][0],
-                stats["items"][1],
-                stats["tags_encrypted"][0],
-                stats["tags_encrypted"][1],
-                stats["tags_plaintext"][0],
-                stats["tags_plaintext"][1],
+            yield ("{:30}" + " | {:8d} {:>8}" * len(tables)).format(
+                ident, *flatten((stats[t][0], stats[t][1]) for t in tables)
             )
         yield ""
+
+    @property
+    def _postgres_tables(self):
+        if self.wallet_type == "askar":
+            return ("items", "items_tags")
+        else:
+            return ("items", "tags_encrypted", "tags_plaintext")
 
     def reset_postgres_stats(self):
         self.wallet_stats.clear()
