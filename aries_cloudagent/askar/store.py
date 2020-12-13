@@ -8,6 +8,7 @@ from aries_askar import Store, StoreError, StoreErrorCode
 
 from ..core.error import ProfileError, ProfileDuplicateError, ProfileNotFoundError
 from ..core.profile import Profile
+from ..utils.env import storage_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,15 +63,15 @@ class AskarStoreConfig:
             raise ProfileError("In-memory wallet only supported for SQLite backend")
         self.storage_type = storage_type
 
-    @property
-    def uri(self) -> str:
+    def get_uri(self, create: bool = False) -> str:
         """Accessor for the storage URI."""
         uri = f"{self.storage_type}://"
         if self.storage_type == "sqlite":
             if self.in_memory:
                 uri += ":memory:"
             else:
-                uri += urllib.parse.quote(f"{self.name}.db")
+                path = storage_path("wallet", self.name, create=create).as_posix()
+                uri += urllib.parse.quote(f"{path}/sqlite.db")
         elif self.storage_type == "postgres":
             if not self.storage_config:
                 raise ProfileError("No 'storage_config' provided for postgres store")
@@ -117,7 +118,7 @@ class AskarStoreConfig:
 
         """
         try:
-            await Store.remove(self.uri)
+            await Store.remove(self.get_uri())
         except StoreError as err:
             if err.code == StoreErrorCode.NOT_FOUND:
                 raise ProfileNotFoundError(
@@ -138,14 +139,14 @@ class AskarStoreConfig:
         try:
             if provision:
                 store = await Store.provision(
-                    self.uri,
+                    self.get_uri(create=True),
                     self.key_derivation_method,
                     self.key,
                     recreate=self.auto_recreate,
                 )
             else:
                 store = await Store.open(
-                    self.uri,
+                    self.get_uri(),
                     self.key_derivation_method,
                     self.key,
                 )

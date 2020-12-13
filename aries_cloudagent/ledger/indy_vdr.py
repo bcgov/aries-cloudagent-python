@@ -11,6 +11,7 @@ import tempfile
 from datetime import datetime, date
 from hashlib import sha256
 from io import StringIO
+from pathlib import Path
 from time import time
 from typing import Sequence, Tuple
 
@@ -19,11 +20,11 @@ from indy_vdr import ledger, open_pool, Pool, Request, VdrError
 from ..cache.base import BaseCache
 from ..core.profile import Profile
 from ..indy.issuer import IndyIssuer, IndyIssuerError, DEFAULT_CRED_DEF_TAG
-from ..indy.util import indy_client_dir
 from ..messaging.credential_definitions.util import CRED_DEF_SENT_RECORD_TYPE
 from ..messaging.schemas.util import SCHEMA_SENT_RECORD_TYPE
 from ..storage.base import BaseStorage, StorageRecord
 from ..utils import sentinel
+from ..utils.env import storage_path
 from ..wallet.base import BaseWallet, DIDInfo
 from ..wallet.did_posture import DIDPosture
 
@@ -51,8 +52,8 @@ def normalize_txns(txns: str) -> str:
     return lines.getvalue()
 
 
-def write_safe(path: str, content: str):
-    dir_path = os.path.dirname(path)
+def write_safe(path: Path, content: str):
+    dir_path = path.parent
     with tempfile.NamedTemporaryFile(dir=dir_path, delete=False) as tmp:
         tmp.write(content.encode("utf-8"))
         tmp_name = tmp.name
@@ -95,16 +96,17 @@ class IndyVdrLedgerPool:
         self.cache_duration: int = cache_duration
         self.handle: Pool = None
         self.name = name
-        self.cfg_path_cache: str = None
+        self.cfg_path_cache: Path = None
         self.genesis_hash_cache: str = None
         self.genesis_txns_cache = genesis_transactions
+        self.init_config = bool(genesis_transactions)
         self.taa_cache: str = None
         self.read_only: bool = read_only
 
     @property
-    def cfg_path(self) -> str:
+    def cfg_path(self) -> Path:
         if not self.cfg_path_cache:
-            self.cfg_path_cache = indy_client_dir("indy-vdr", True)
+            self.cfg_path_cache = storage_path("vdr", create=True)
         return self.cfg_path_cache
 
     @property
@@ -117,9 +119,8 @@ class IndyVdrLedgerPool:
     def genesis_txns(self) -> str:
         if not self.genesis_txns_cache:
             try:
-                self.genesis_txns_cache = normalize_txns(
-                    open(os.path.join(self.cfg_path, self.name, "genesis")).read()
-                )
+                path = self.cfg_path.joinpath(self.name, "genesis")
+                self.genesis_txns_cache = normalize_txns(open(path).read())
             except FileNotFoundError:
                 raise LedgerConfigError(
                     "Pool config '%s' not found", self.name
@@ -131,18 +132,13 @@ class IndyVdrLedgerPool:
     ):
         """Create the pool ledger configuration."""
 
-        cfg_path = self.cfg_path
-        cfg_pool = os.path.join(cfg_path, self.name)
+        cfg_pool = self.cfg_path.joinpath(self.name)
+        cfg_pool.mkdir(exist_ok=True)
         genesis = normalize_txns(genesis_transactions)
         if not genesis:
             raise LedgerConfigError("Empty genesis transactions")
 
-        try:
-            os.mkdir(cfg_pool)
-        except FileExistsError:
-            pass
-
-        genesis_path = os.path.join(cfg_pool, "genesis")
+        genesis_path = cfg_pool.joinpath("genesis")
         try:
             cmp_genesis = open(genesis_path).read()
             # FIXME: some normalization wouldn't hurt
@@ -171,17 +167,15 @@ class IndyVdrLedgerPool:
     async def open(self):
         """Open the pool ledger, creating it if necessary."""
 
-        cfg_path = self.cfg_path
+        if self.init_config:
+            await self.create_pool_config(self.genesis_txns_cache, recreate=True)
+            self.init_config = False
+
         genesis_hash = self.genesis_hash
+        cfg_pool = self.cfg_path.joinpath(self.name)
+        cfg_pool.mkdir(exist_ok=True)
 
-        cfg_pool = os.path.join(cfg_path, self.name)
-
-        try:
-            os.mkdir(cfg_pool)
-        except FileExistsError:
-            pass
-
-        cache_path = os.path.join(cfg_pool, f"cache-{genesis_hash}")
+        cache_path = cfg_pool.joinpath(f"cache-{genesis_hash}")
         try:
             txns = open(cache_path).read()
             cached = True
