@@ -171,7 +171,13 @@ class AskarStorage(BaseStorage):
             raise StorageDuplicateError("Duplicate records found")
         if not results:
             raise StorageNotFoundError("Record not found")
-        return results[0]
+        row = results[0]
+        return StorageRecord(
+            type=row.category,
+            id=row.name,
+            value=None if row.value is None else row.value.decode("utf-8"),
+            tags=row.tags,
+        )
 
     async def find_all_records(
         self,
