@@ -965,12 +965,13 @@ class IndyVdrLedger(BaseLedger):
             next_seed: seed for incoming ed25519 keypair (default random)
         """
         # generate new key
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
+        async with self.profile.transaction() as txn:
+            wallet = txn.inject(BaseWallet)
             public_info = await wallet.get_public_did()
             public_did = public_info.did
             verkey = await wallet.rotate_did_keypair_start(public_did, next_seed)
             del wallet
+            await txn.commit()
 
         # submit to ledger (retain role and alias)
         nym = self.did_to_nym(public_did)
@@ -1004,10 +1005,11 @@ class IndyVdrLedger(BaseLedger):
         await self.register_nym(public_did, verkey, role_token, alias)
 
         # update wallet
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
+        async with self.profile.transaction() as txn:
+            wallet = txn.inject(BaseWallet)
             await wallet.rotate_did_keypair_apply(public_did)
             del wallet
+            await txn.commit()
 
     async def get_txn_author_agreement(self, reload: bool = False) -> dict:
         """Get the current transaction author agreement, fetching it if necessary."""

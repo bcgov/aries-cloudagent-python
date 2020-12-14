@@ -217,9 +217,8 @@ class AskarWallet(BaseWallet):
 
         """
 
-        # FIXME this is potentially slow / memory intensive.
-        # it also won't find a DID created in the current transaction before
-        # that has been committed. Need to check use cases for this method
+        # FIXME this is potentially slow and memory intensive. It would
+        # be better to store a separate record pointing to the public DID.
 
         ret = []
         for item in await self._session.handle.fetch_all(CATEGORY_DID):
@@ -360,24 +359,36 @@ class AskarWallet(BaseWallet):
             The new verification key
 
         """
-        # try:
-        #     verkey = await indy.did.replace_keys_start(
-        #         self.handle,
-        #         did,
-        #         json.dumps(
-        #             {"seed": bytes_to_b64(validate_seed(next_seed))}
-        #             if next_seed
-        #             else {}
-        #         ),
-        #     )
-        # except IndyError as x_indy:
-        #     if x_indy.error_code == ErrorCode.WalletItemNotFound:
-        #         raise WalletNotFoundError("Wallet owns no such DID: {}".format(did))
-        #     raise IndyErrorHandler.wrap_error(
-        #         x_indy, "Wallet {} error".format(self.name), WalletError
-        #     ) from x_indy
 
-        # return verkey
+        # create a new key to be rotated to
+        seed = validate_seed(next_seed)
+        try:
+            verkey = await self._session.handle.create_keypair(
+                KeyAlg.ED25519, seed=seed
+            )
+        except StoreError as err:
+            if err.code == StoreErrorCode.DUPLICATE:
+                verkey = await derive_verkey(KeyAlg.ED25519, next_seed)
+            else:
+                raise WalletError(
+                    "Error when creating new keypair for local DID"
+                ) from err
+
+        try:
+            item = await self._session.handle.fetch(CATEGORY_DID, did, for_update=True)
+            if not item:
+                raise WalletNotFoundError("Unknown DID: {}".format(did)) from None
+            entry_val = item.value_json
+            metadata = entry_val.get("metadata", {})
+            metadata["next_verkey"] = verkey
+            entry_val["metadata"] = metadata
+            await self._session.handle.replace(
+                CATEGORY_DID, did, value_json=entry_val, tags=item.tags
+            )
+        except StoreError as err:
+            raise WalletError("Error updating DID metadata") from err
+
+        return normalize_verkey(verkey)
 
     async def rotate_did_keypair_apply(self, did: str) -> DIDInfo:
         """
@@ -390,14 +401,22 @@ class AskarWallet(BaseWallet):
             DIDInfo with new verification key and metadata for DID
 
         """
-        # try:
-        #     await indy.did.replace_keys_apply(self.handle, did)
-        # except IndyError as x_indy:
-        #     if x_indy.error_code == ErrorCode.WalletItemNotFound:
-        #         raise WalletNotFoundError("Wallet owns no such DID: {}".format(did))
-        #     raise IndyErrorHandler.wrap_error(
-        #         x_indy, "Wallet {} error".format(self.name), WalletError
-        #     ) from x_indy
+        try:
+            item = await self._session.handle.fetch(CATEGORY_DID, did, for_update=True)
+            if not item:
+                raise WalletNotFoundError("Unknown DID: {}".format(did)) from None
+            entry_val = item.value_json
+            metadata = entry_val.get("metadata", {})
+            next_verkey = metadata.get("next_verkey")
+            if not next_verkey:
+                raise WalletError("Cannot rotate DID key: no next key established")
+            del metadata["next_verkey"]
+            entry_val["verkey"] = next_verkey
+            await self._session.handle.replace(
+                CATEGORY_DID, did, value_json=entry_val, tags=item.tags
+            )
+        except StoreError as err:
+            raise WalletError("Error updating DID metadata") from err
 
     async def sign_message(self, message: bytes, from_verkey: str) -> bytes:
         """
