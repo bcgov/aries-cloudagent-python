@@ -78,7 +78,7 @@ class RevocationManager:
                 along with any revocations pending against it
 
         """
-        issuer: IndyIssuer = self._profile.inject(IndyIssuer)
+        issuer = self._profile.inject(IndyIssuer)
 
         revoc = IndyRevocation(self._profile)
         issuer_rr_rec = await revoc.get_issuer_rev_reg_record(rev_reg_id)
@@ -135,8 +135,8 @@ class RevocationManager:
         result = {}
         issuer = self._profile.inject(IndyIssuer)
 
-        async with self._profile.session() as session:
-            issuer_rr_recs = await IssuerRevRegRecord.query_by_pending(session)
+        txn = await self._profile.transaction()
+        issuer_rr_recs = await IssuerRevRegRecord.query_by_pending(txn)
         for issuer_rr_rec in issuer_rr_recs:
             rrid = issuer_rr_rec.revoc_reg_id
             crids = []
@@ -149,6 +149,7 @@ class RevocationManager:
                     if crid in (rrid2crid[rrid] or []) or not rrid2crid[rrid]
                 ]
             if crids:
+                # FIXME - must use the same transaction
                 (delta_json, failed_crids) = await issuer.revoke_credentials(
                     issuer_rr_rec.revoc_reg_id,
                     issuer_rr_rec.tails_local_path,
@@ -158,8 +159,8 @@ class RevocationManager:
                 await issuer_rr_rec.send_entry(self._profile)
                 published = [crid for crid in crids if crid not in failed_crids]
                 result[issuer_rr_rec.revoc_reg_id] = published
-                async with self._profile.session() as session:
-                    await issuer_rr_rec.clear_pending(session, published)
+                await issuer_rr_rec.clear_pending(txn, published)
+                await txn.commit()
 
         return result
 
@@ -194,12 +195,14 @@ class RevocationManager:
 
         """
         result = {}
-        async with self._profile.session() as session:
-            issuer_rr_recs = await IssuerRevRegRecord.query_by_pending(session)
+
+        async with self._profile.transaction() as txn:
+            issuer_rr_recs = await IssuerRevRegRecord.query_by_pending(txn)
             for issuer_rr_rec in issuer_rr_recs:
                 rrid = issuer_rr_rec.revoc_reg_id
-                await issuer_rr_rec.clear_pending(session, (purge or {}).get(rrid))
+                await issuer_rr_rec.clear_pending(txn, (purge or {}).get(rrid))
                 if issuer_rr_rec.pending_pub:
                     result[rrid] = issuer_rr_rec.pending_pub
+            await txn.commit()
 
         return result

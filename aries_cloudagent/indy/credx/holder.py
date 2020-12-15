@@ -211,13 +211,7 @@ class IndyCredxHolder(IndyHolder):
             "rev_reg_id": cred_recvd.rev_reg_id or "None",
         }
 
-        # if credential.cred_def_id.is_fully_qualified() {
-        #     res.insert(Credential::add_extra_tag_suffix("schema_id"), credential.schema_id.to_unqualified().0);
-        #     res.insert(Credential::add_extra_tag_suffix("schema_issuer_did"), schema_issuer_did.to_unqualified().0);
-        #     res.insert(Credential::add_extra_tag_suffix("issuer_did"), issuer_did.to_unqualified().0);
-        #     res.insert(Credential::add_extra_tag_suffix("cred_def_id"), credential.cred_def_id.to_unqualified().0);
-        #     res.insert(Credential::add_extra_tag_suffix("rev_reg_id"), credential.rev_reg_id.as_ref().map(|rev_reg_id| rev_reg_id.to_unqualified().0.clone()).unwrap_or_else(|| "None".to_string()));
-        # }
+        # FIXME - sdk has some special handling for fully qualified DIDs here
 
         mime_types = {}
         for k, attr_value in credential_data["values"].items():
@@ -366,7 +360,7 @@ class IndyCredxHolder(IndyHolder):
             raise IndyHolderError("Error loading requested credential") from err
 
     async def credential_revoked(
-        self, credential_id: str, ledger: BaseLedger, fro: int = None, to: int = None
+        self, ledger: BaseLedger, credential_id: str, fro: int = None, to: int = None
     ) -> bool:
         """
         Check ledger for revocation status of credential by cred id.

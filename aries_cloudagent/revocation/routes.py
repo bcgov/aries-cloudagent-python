@@ -375,6 +375,7 @@ async def create_rev_reg(request: web.BaseRequest):
     # check we published this cred def
     async with context.session() as session:
         storage = session.inject(BaseStorage)
+
         found = await storage.find_all_records(
             type_filter=CRED_DEF_SENT_RECORD_TYPE,
             tag_query={"cred_def_id": credential_definition_id},

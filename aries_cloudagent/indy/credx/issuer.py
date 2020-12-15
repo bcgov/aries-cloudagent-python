@@ -353,7 +353,7 @@ class IndyCredxIssuer(IndyIssuer):
 
     async def revoke_credentials(
         self, revoc_reg_id: str, tails_file_path: str, cred_revoc_ids: Sequence[str]
-    ) -> str:
+    ) -> (str, Sequence[str]):
         """
         Revoke a set of credentials in a revocation registry.
 
@@ -363,10 +363,11 @@ class IndyCredxIssuer(IndyIssuer):
             cred_revoc_ids: sequences of credential indexes in the revocation registry
 
         Returns:
-            the combined revocation delta
+            Tuple with the combined revocation delta, list of cred rev ids not revoked
 
         """
 
+        failed_crids = []
         txn = await self._profile.transaction()
         try:
             rev_reg_def = await txn.handle.fetch(CATEGORY_REV_REG_DEF, revoc_reg_id)
@@ -382,13 +383,14 @@ class IndyCredxIssuer(IndyIssuer):
 
         try:
             rev_reg = RevocationRegistry.load(rev_reg.raw_value)
-            upd_registry, delta = await asyncio.get_event_loop().run_in_executor(
+            delta = await asyncio.get_event_loop().run_in_executor(
                 None,
-                rev_reg.update,
-                rev_reg_def,
-                None,  # issued
-                [int(rev_idx) for rev_idx in cred_revoc_ids],  # revoked
-                tails_file_path,
+                lambda: rev_reg.update(
+                    rev_reg_def.raw_value,
+                    None,  # issued
+                    [int(rev_idx) for rev_idx in cred_revoc_ids],  # revoked
+                    tails_file_path,
+                ),
             )
         except CredxError as err:
             raise IndyIssuerError("Error updating revocation registry") from err
@@ -399,9 +401,9 @@ class IndyCredxIssuer(IndyIssuer):
             )
             await txn.commit()
         except StoreError as err:
-            raise IndyIssuerError("Error retrieving revocation registry") from err
+            raise IndyIssuerError("Error saving revocation registry") from err
 
-        return delta.to_json()
+        return (delta.to_json(), failed_crids)
 
     async def merge_revocation_registry_deltas(
         self, fro_delta: str, to_delta: str

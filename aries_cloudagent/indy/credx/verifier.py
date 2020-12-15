@@ -8,7 +8,7 @@ from indy_credx import Presentation
 from ...core.profile import Profile
 from ...ledger.base import BaseLedger
 
-from ..verifier import IndyVerifier, PreVerifyResult
+from ..verifier import IndyVerifier
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ class IndyCredxVerifier(IndyVerifier):
 
     async def verify_presentation(
         self,
-        presentation_request,
-        presentation,
+        pres_req,
+        pres,
         schemas,
         credential_definitions,
         rev_reg_defs,
@@ -39,30 +39,31 @@ class IndyCredxVerifier(IndyVerifier):
         Verify a presentation.
 
         Args:
-            presentation_request: Presentation request data
-            presentation: Presentation data
+            pres_req: Presentation request data
+            pres: Presentation data
             schemas: Schema data
             credential_definitions: credential definition data
             rev_reg_defs: revocation registry definitions
             rev_reg_entries: revocation registry entries
         """
 
-        self.non_revoc_intervals(presentation_request, presentation)
-
-        (pv_result, pv_msg) = await self.pre_verify(presentation_request, presentation)
-        if pv_result != PreVerifyResult.OK:
+        try:
+            self.non_revoc_intervals(pres_req, pres)
+            await self.check_timestamps(pres_req, pres, rev_reg_defs)
+            await self.pre_verify(pres_req, pres)
+        except ValueError as err:
             LOGGER.error(
-                f"Presentation on nonce={presentation_request['nonce']} "
-                f"cannot be validated: {pv_result.value} [{pv_msg}]"
+                f"Presentation on nonce={pres_req['nonce']} "
+                f"cannot be validated: {str(err)}"
             )
             return False
 
         try:
-            presentation = Presentation.load(presentation)
+            presentation = Presentation.load(pres)
             verified = await asyncio.get_event_loop().run_in_executor(
                 None,
                 presentation.verify,
-                presentation_request,
+                pres_req,
                 schemas.values(),
                 credential_definitions.values(),
                 rev_reg_defs.values(),
@@ -70,7 +71,7 @@ class IndyCredxVerifier(IndyVerifier):
             )
         except Exception:
             LOGGER.exception(
-                f"Validation of presentation on nonce={presentation_request['nonce']} "
+                f"Validation of presentation on nonce={pres_req['nonce']} "
                 "failed with error"
             )
             verified = False

@@ -1175,11 +1175,17 @@ class IndyVdrLedger(BaseLedger):
                 f"get_revoc_reg_delta failed for revoc_reg_id='{revoc_reg_id}'"
             ) from err
 
-        reg_delta = {
-            "ver": "1.0",
-            "value": response["data"]["value"]["accum_to"]["value"],
+        response_value = response["data"]["value"]
+        delta_value = {
+            "accum": response_value["accum_to"]["value"]["accum"],
+            "issued": response_value.get("issued", []),
+            "revoked": response_value.get("revoked", []),
         }
-        delta_timestamp = response["data"]["txnTime"]
+        if "accum_from" in response_value:
+            delta_value["prev_accum"] = response_value["accum_from"]["value"]["accum"]
+        reg_delta = {"ver": "1.0", "value": delta_value}
+        # FIXME - why not response["to"] ?
+        delta_timestamp = response_value["accum_to"]["txnTime"]
         assert response["data"]["revocRegDefId"] == revoc_reg_id
         return reg_delta, delta_timestamp
 
