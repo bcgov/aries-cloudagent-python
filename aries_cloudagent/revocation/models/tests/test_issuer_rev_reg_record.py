@@ -27,6 +27,7 @@ class TestIssuerRevRegRecord(AsyncTestCase):
         self.profile = InMemoryProfile.test_profile(
             settings={"tails_server_base_url": "http://1.2.3.4:8088"},
         )
+        self.context = self.profile.context
 
         Ledger = async_mock.MagicMock(BaseLedger, autospec=True)
         self.ledger = Ledger()
@@ -44,11 +45,12 @@ class TestIssuerRevRegRecord(AsyncTestCase):
         self.session = await self.profile.session()
 
     async def test_order(self):
-        rec0 = IssuerRevRegRecord()
-        await rec0.save(self.session, reason="a record")
-        rec1 = IssuerRevRegRecord()
-        await rec1.save(self.session, reason="another record")
-        assert rec0 < rec1
+        async with self.profile.session() as session:
+            rec0 = IssuerRevRegRecord()
+            await rec0.save(session, reason="a record")
+            rec1 = IssuerRevRegRecord()
+            await rec1.save(session, reason="another record")
+            assert rec0 < rec1
 
     async def test_generate_registry_etc(self):
         rec = IssuerRevRegRecord(
@@ -109,20 +111,21 @@ class TestIssuerRevRegRecord(AsyncTestCase):
         rev_reg = await rec.get_registry()
         assert type(rev_reg) == RevocationRegistry
 
-        queried = await IssuerRevRegRecord.query_by_cred_def_id(
-            session=self.session,
-            cred_def_id=CRED_DEF_ID,
-            state=IssuerRevRegRecord.STATE_ACTIVE,
-        )
-        assert len(queried) == 1
+        async with self.profile.session() as session:
+            queried = await IssuerRevRegRecord.query_by_cred_def_id(
+                session=session,
+                cred_def_id=CRED_DEF_ID,
+                state=IssuerRevRegRecord.STATE_ACTIVE,
+            )
+            assert len(queried) == 1
 
-        retrieved = await IssuerRevRegRecord.retrieve_by_revoc_reg_id(
-            session=self.session, revoc_reg_id=rec.revoc_reg_id
-        )
-        assert retrieved.revoc_reg_id == rec.revoc_reg_id
+            retrieved = await IssuerRevRegRecord.retrieve_by_revoc_reg_id(
+                session=session, revoc_reg_id=rec.revoc_reg_id
+            )
+            assert retrieved.revoc_reg_id == rec.revoc_reg_id
 
-        await rec.set_state(self.session)
-        assert rec.state == IssuerRevRegRecord.STATE_FULL
+            await rec.set_state(session)
+            assert rec.state == IssuerRevRegRecord.STATE_FULL
 
         data = rec.serialize()
         model_instance = IssuerRevRegRecord.deserialize(data)
@@ -152,32 +155,33 @@ class TestIssuerRevRegRecord(AsyncTestCase):
             await rec_full.send_entry(self.profile)
 
     async def test_pending(self):
-        rec = IssuerRevRegRecord()
-        await rec.mark_pending(self.session, "1")
-        await rec.mark_pending(self.session, "2")
-        await rec.mark_pending(self.session, "3")
-        await rec.mark_pending(self.session, "4")
+        async with self.profile.session() as session:
+            rec = IssuerRevRegRecord()
+            await rec.mark_pending(session, "1")
+            await rec.mark_pending(session, "2")
+            await rec.mark_pending(session, "3")
+            await rec.mark_pending(session, "4")
 
-        found = await IssuerRevRegRecord.query_by_pending(self.session)
-        assert len(found) == 1 and found[0] == rec
+            found = await IssuerRevRegRecord.query_by_pending(session)
+            assert len(found) == 1 and found[0] == rec
 
-        await rec.clear_pending(self.session, ["1", "2"])
-        assert rec.pending_pub == ["3", "4"]
-        found = await IssuerRevRegRecord.query_by_pending(self.session)
-        assert found
+            await rec.clear_pending(session, ["1", "2"])
+            assert rec.pending_pub == ["3", "4"]
+            found = await IssuerRevRegRecord.query_by_pending(session)
+            assert found
 
-        await rec.clear_pending(self.session, [])
-        assert rec.pending_pub == []
-        found = await IssuerRevRegRecord.query_by_pending(self.session)
-        assert not found
+            await rec.clear_pending(session, [])
+            assert rec.pending_pub == []
+            found = await IssuerRevRegRecord.query_by_pending(session)
+            assert not found
 
-        await rec.mark_pending(self.session, "5")
-        await rec.mark_pending(self.session, "6")
+            await rec.mark_pending(session, "5")
+            await rec.mark_pending(session, "6")
 
-        await rec.clear_pending(self.session, [])
-        assert rec.pending_pub == []
-        found = await IssuerRevRegRecord.query_by_pending(self.session)
-        assert not found
+            await rec.clear_pending(session, [])
+            assert rec.pending_pub == []
+            found = await IssuerRevRegRecord.query_by_pending(session)
+            assert not found
 
     async def test_set_tails_file_public_uri_rev_reg_undef(self):
         rec = IssuerRevRegRecord()

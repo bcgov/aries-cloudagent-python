@@ -1118,7 +1118,7 @@ class IndyVdrLedger(BaseLedger):
                 f"get_revoc_reg_def failed for revoc_reg_id='{revoc_reg_id}'"
             ) from err
 
-        revoc_reg_def = response["result"]["data"]
+        revoc_reg_def = response["data"]
         revoc_reg_def["ver"] = "1.0"
 
         assert revoc_reg_def.get("id") == revoc_reg_id
@@ -1141,10 +1141,10 @@ class IndyVdrLedger(BaseLedger):
 
         reg_entry = {
             "ver": "1.0",
-            "value": response["result"]["data"]["value"],
+            "value": response["data"]["value"],
         }
-        ledger_timestamp = response["result"]["data"]["txnTime"]
-        assert response["result"]["data"]["revocRegDefId"] == revoc_reg_id
+        ledger_timestamp = response["data"]["txnTime"]
+        assert response["data"]["revocRegDefId"] == revoc_reg_id
         return reg_entry, ledger_timestamp
 
     async def get_revoc_reg_delta(
@@ -1177,10 +1177,10 @@ class IndyVdrLedger(BaseLedger):
 
         reg_delta = {
             "ver": "1.0",
-            "value": response["result"]["data"]["value"]["accum_to"]["value"],
+            "value": response["data"]["value"]["accum_to"]["value"],
         }
-        delta_timestamp = response["result"]["data"]["txnTime"]
-        assert response["result"]["data"]["revocRegDefId"] == revoc_reg_id
+        delta_timestamp = response["data"]["txnTime"]
+        assert response["data"]["revocRegDefId"] == revoc_reg_id
         return reg_delta, delta_timestamp
 
     async def send_revoc_reg_def(self, revoc_reg_def: dict, issuer_did: str = None):
@@ -1198,7 +1198,7 @@ class IndyVdrLedger(BaseLedger):
                 "No issuer DID found for revocation registry definition"
             )
         try:
-            request_json = ledger.build_revoc_reg_def_request(
+            request = ledger.build_revoc_reg_def_request(
                 did_info.did, json.dumps(revoc_reg_def)
             )
         except VdrError as err:
@@ -1206,7 +1206,7 @@ class IndyVdrLedger(BaseLedger):
                 "Exception when sending revocation registry definition"
             ) from err
 
-        await self._submit(request_json, True, True, did_info)
+        await self._submit(request, True, True, did_info)
 
     async def send_revoc_reg_entry(
         self,
@@ -1228,14 +1228,14 @@ class IndyVdrLedger(BaseLedger):
                 "No issuer DID found for revocation registry entry"
             )
         try:
-            request_json = ledger.build_revoc_reg_entry_request(
+            request = ledger.build_revoc_reg_entry_request(
                 did_info.did, revoc_reg_id, revoc_def_type, json.dumps(revoc_reg_entry)
             )
         except VdrError as err:
             raise LedgerError(
                 "Exception when sending revocation registry entry"
             ) from err
-        await self._submit(request_json, True, True, did_info)
+        await self._submit(request, True, True, did_info)
 
     async def get_wallet_public_did(self) -> DIDInfo:
         """Fetch the public DID from the wallet."""

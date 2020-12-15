@@ -207,7 +207,6 @@ class IndySdkIssuer(IndyIssuer):
         )
 
         try:
-            session = await self.profile.session()
             (
                 credential_json,
                 cred_rev_id,
@@ -228,13 +227,14 @@ class IndySdkIssuer(IndyIssuer):
                     rev_reg_id=rev_reg_id,
                     cred_rev_id=cred_rev_id,
                 )
-                await issuer_cr_rec.save(
-                    session,
-                    reason=(
-                        "Created issuer cred rev record for "
-                        f"rev reg id {rev_reg_id}, {cred_rev_id}"
-                    ),
-                )
+                async with self.profile.session() as session:
+                    await issuer_cr_rec.save(
+                        session,
+                        reason=(
+                            "Created issuer cred rev record for "
+                            f"rev reg id {rev_reg_id}, {cred_rev_id}"
+                        ),
+                    )
         except AnoncredsRevocationRegistryFullError:
             LOGGER.warning(
                 "Revocation registry %s is full: cannot create credential",

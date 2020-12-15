@@ -87,12 +87,6 @@ class AskarStorage(BaseStorage):
         if not options:
             options = {}
         try:
-            if not self._session.handle:
-                print(self._session, self._session.handle)
-                import traceback
-
-                traceback.print_stack()
-                raise SystemExit
             item = await self._session.handle.fetch(record_type, record_id)
         except StoreError as err:
             raise StorageError("Error when fetching storage record") from err
