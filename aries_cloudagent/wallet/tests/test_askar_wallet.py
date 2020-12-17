@@ -2,6 +2,8 @@ import pytest
 
 from asynctest import mock as async_mock
 
+from aries_askar import StoreError, StoreErrorCode
+
 from ...askar.profile import AskarProfileManager
 from ...core.in_memory import InMemoryProfile
 from ...ledger.endpoint_type import EndpointType
@@ -151,36 +153,26 @@ class TestAskarWallet(test_in_memory_wallet.TestInMemoryWallet):
                 await wallet.get_local_did(None)
             assert "outlier" in str(excinfo.value)
 
-    @pytest.mark.skip
     @pytest.mark.asyncio
     async def test_verify_message_x(self, wallet):
         with async_mock.patch.object(
-            indy.crypto, "crypto_verify", async_mock.CoroutineMock()
+            test_module, "verify_signature", async_mock.CoroutineMock()
         ) as mock_verify:
-            mock_verify.side_effect = test_module.IndyError(  # outlier
-                test_module.ErrorCode.CommonIOError, {"message": "outlier"}
+            mock_verify.side_effect = test_module.StoreError(  # outlier
+                StoreErrorCode.BACKEND, {"message": "outlier"}
             )
             with pytest.raises(test_module.WalletError) as excinfo:
                 await wallet.verify_message(
                     b"hello world", b"signature", self.test_verkey
                 )
-            assert "outlier" in str(excinfo.value)
 
-            mock_verify.side_effect = test_module.IndyError(  # plain wrong
-                test_module.ErrorCode.CommonInvalidStructure
-            )
-            assert not await wallet.verify_message(
-                b"hello world", b"signature", self.test_verkey
-            )
-
-    @pytest.mark.skip
     @pytest.mark.asyncio
     async def test_pack_message_x(self, wallet):
         with async_mock.patch.object(
-            indy.crypto, "pack_message", async_mock.CoroutineMock()
+            test_module.Session, "pack_message", async_mock.CoroutineMock()
         ) as mock_pack:
-            mock_pack.side_effect = test_module.IndyError(  # outlier
-                test_module.ErrorCode.CommonIOError, {"message": "outlier"}
+            mock_pack.side_effect = StoreError(  # outlier
+                StoreErrorCode.BACKEND, {"message": "outlier"}
             )
             with pytest.raises(test_module.WalletError) as excinfo:
                 await wallet.pack_message(
@@ -189,7 +181,6 @@ class TestAskarWallet(test_in_memory_wallet.TestInMemoryWallet):
                         self.test_verkey,
                     ],
                 )
-            assert "outlier" in str(excinfo.value)
 
 
 @pytest.mark.askar

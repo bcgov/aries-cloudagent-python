@@ -68,7 +68,7 @@ class AskarWallet(BaseWallet):
 
         Raises:
             WalletDuplicateError: If the resulting verkey already exists in the wallet
-            WalletError: If there is a libindy error
+            WalletError: If there is an aries_askar error
 
         """
 
@@ -101,7 +101,7 @@ class AskarWallet(BaseWallet):
 
         Raises:
             WalletNotFoundError: If no keypair is associated with the verification key
-            WalletError: If there is a libindy error
+            WalletError: If there is a aries_askar error
 
         """
 
@@ -154,7 +154,7 @@ class AskarWallet(BaseWallet):
 
         Raises:
             WalletDuplicateError: If the DID already exists in the wallet
-            WalletError: If there is a libindy error
+            WalletError: If there is a aries_askar error
 
         """
 
@@ -201,6 +201,7 @@ class AskarWallet(BaseWallet):
                     CATEGORY_DID,
                     did,
                     value_json={"did": did, "verkey": verkey, "metadata": metadata},
+                    tags={"verkey": verkey},
                 )
 
         except StoreError as err:
@@ -244,7 +245,7 @@ class AskarWallet(BaseWallet):
 
         Raises:
             WalletNotFoundError: If the DID is not found
-            WalletError: If there is a libindy error
+            WalletError: If there is an aries_askar error
 
         """
 
@@ -278,10 +279,19 @@ class AskarWallet(BaseWallet):
 
         """
 
-        dids = await self.get_local_dids()
-        for info in dids:
-            if info.verkey == verkey:
-                return info
+        try:
+            dids = await self._session.handle.fetch_all(
+                CATEGORY_DID, {"verkey": verkey}, limit=1
+            )
+        except StoreError as err:
+            raise WalletError("Error when fetching local DID for verkey") from err
+        if dids:
+            did_info = dids[0].value_json
+            return DIDInfo(
+                did=did_info["did"],
+                verkey=did_info["verkey"],
+                metadata=did_info.get("metadata") or {},
+            )
         raise WalletNotFoundError("No DID defined for verkey: {}".format(verkey))
 
     async def replace_local_did_metadata(self, did: str, metadata: dict):
@@ -412,6 +422,7 @@ class AskarWallet(BaseWallet):
                 raise WalletError("Cannot rotate DID key: no next key established")
             del metadata["next_verkey"]
             entry_val["verkey"] = next_verkey
+            item.tags["verkey"] = next_verkey
             await self._session.handle.replace(
                 CATEGORY_DID, did, value_json=entry_val, tags=item.tags
             )
@@ -432,7 +443,7 @@ class AskarWallet(BaseWallet):
         Raises:
             WalletError: If the message is not provided
             WalletError: If the verkey is not provided
-            WalletError: If a libindy error occurs
+            WalletError: If an aries_askar error occurs
 
         """
         if not message:
@@ -462,7 +473,7 @@ class AskarWallet(BaseWallet):
             WalletError: If the verkey is not provided
             WalletError: If the signature is not provided
             WalletError: If the message is not provided
-            WalletError: If a libindy error occurs
+            WalletError: If an aries_askar error occurs
 
         """
         if not from_verkey:
@@ -493,7 +504,7 @@ class AskarWallet(BaseWallet):
 
         Raises:
             WalletError: If no message is provided
-            WalletError: If a libindy error occurs
+            WalletError: If an aries_askar error occurs
 
         """
         if message is None:
@@ -517,7 +528,7 @@ class AskarWallet(BaseWallet):
 
         Raises:
             WalletError: If the message is not provided
-            WalletError: If a libindy error occurs
+            WalletError: If an aries_askar error occurs
 
         """
         if not enc_message:
