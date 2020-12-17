@@ -141,7 +141,6 @@ class IndyVdrLedgerPool:
         genesis_path = cfg_pool.joinpath("genesis")
         try:
             cmp_genesis = open(genesis_path).read()
-            # FIXME: some normalization wouldn't hurt
             if normalize_txns(cmp_genesis) == genesis:
                 LOGGER.debug(
                     "Pool ledger config '%s' is consistent, skipping write",
@@ -1120,6 +1119,7 @@ class IndyVdrLedger(BaseLedger):
 
         revoc_reg_def = response["data"]
         revoc_reg_def["ver"] = "1.0"
+        revoc_reg_def["txnTime"] = response["txnTime"]
 
         assert revoc_reg_def.get("id") == revoc_reg_id
         return revoc_reg_def
@@ -1139,11 +1139,11 @@ class IndyVdrLedger(BaseLedger):
                 f"get_revoc_reg_entry failed for revoc_reg_id='{revoc_reg_id}'"
             ) from err
 
+        ledger_timestamp = response["data"]["txnTime"]
         reg_entry = {
             "ver": "1.0",
             "value": response["data"]["value"],
         }
-        ledger_timestamp = response["data"]["txnTime"]
         assert response["data"]["revocRegDefId"] == revoc_reg_id
         return reg_entry, ledger_timestamp
 
