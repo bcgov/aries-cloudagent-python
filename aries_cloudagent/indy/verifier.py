@@ -6,6 +6,7 @@ from abc import ABC, ABCMeta, abstractmethod
 from time import time
 from typing import Mapping
 
+from ..ledger.base import BaseLedger
 from ..messaging.util import canon, encode
 from ..protocols.present_proof.v1_0.util.indy import indy_proof_req2non_revoc_intervals
 
@@ -72,6 +73,7 @@ class IndyVerifier(ABC, metaclass=ABCMeta):
 
     async def check_timestamps(
         self,
+        ledger: BaseLedger,
         pres_req: Mapping,
         pres: Mapping,
         rev_reg_defs: Mapping,
@@ -83,6 +85,7 @@ class IndyVerifier(ABC, metaclass=ABCMeta):
         superfluous or missing.
 
         Args:
+            ledger: the base ledger for retrieving revocation registry definitions
             pres_req: indy proof request
             pres: indy proof request
             rev_reg_defs: rev reg defs by rev reg id, augmented with transaction times
@@ -91,11 +94,11 @@ class IndyVerifier(ABC, metaclass=ABCMeta):
         non_revoc_intervals = indy_proof_req2non_revoc_intervals(pres_req)
 
         # timestamp for irrevocable credential
-        async with self.ledger:
+        async with ledger:
             for (index, ident) in enumerate(pres["identifiers"]):
                 if ident.get("timestamp"):
                     cred_def_id = ident["cred_def_id"]
-                    cred_def = await self.ledger.get_credential_definition(cred_def_id)
+                    cred_def = await ledger.get_credential_definition(cred_def_id)
                     if not cred_def["value"].get("revocation"):
                         raise ValueError(
                             f"Timestamp in presentation identifier #{index} "

@@ -1,12 +1,13 @@
-import json
 import pytest
 
 from copy import deepcopy
+from time import time
 
-from asynctest import mock as async_mock, TestCase as AsyncTestCase
-from indy.error import IndyError
+from asynctest import TestCase as AsyncTestCase
+from asynctest import mock as async_mock
 
-from ..verifier import IndySdkVerifier
+from .. import verifier as test_module
+from ..verifier import IndyVerifier
 
 
 INDY_PROOF_REQ_NAME = {
@@ -285,6 +286,19 @@ REV_REG_DEFS = {
 }
 
 
+class MockVerifier(IndyVerifier):
+    async def verify_presentation(
+        self,
+        pres_req,
+        pres,
+        schemas,
+        credential_definitions,
+        rev_reg_defs,
+        rev_reg_entries,
+    ) -> bool:
+        raise NotImplementedError()
+
+
 @pytest.mark.indy
 class TestIndySdkVerifier(AsyncTestCase):
     def setUp(self):
@@ -310,207 +324,458 @@ class TestIndySdkVerifier(AsyncTestCase):
                 }
             )
         )
-        self.verifier = IndySdkVerifier(self.ledger)
-        assert repr(self.verifier) == "<IndySdkVerifier>"
+        self.verifier = MockVerifier()
 
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_verify_presentation(self, mock_verify):
-        mock_verify.return_value = "val"
-
-        with async_mock.patch.object(
-            self.verifier, "pre_verify", async_mock.CoroutineMock()
-        ) as mock_pre_verify, async_mock.patch.object(
-            self.verifier, "non_revoc_intervals", async_mock.MagicMock()
-        ) as mock_non_revox:
-            verified = await self.verifier.verify_presentation(
-                INDY_PROOF_REQ_PRED_NAMES,
-                INDY_PROOF_PRED_NAMES,
-                "schemas",
-                "credential_definitions",
-                REV_REG_DEFS,
-                "rev_reg_entries",
-            )
-
-        mock_verify.assert_called_once_with(
-            json.dumps(INDY_PROOF_REQ_PRED_NAMES),
-            json.dumps(INDY_PROOF_PRED_NAMES),
-            json.dumps("schemas"),
-            json.dumps("credential_definitions"),
-            json.dumps(REV_REG_DEFS),
-            json.dumps("rev_reg_entries"),
-        )
-
-        assert verified == "val"
-
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_verify_presentation_x_indy(self, mock_verify):
-        mock_verify.side_effect = IndyError(error_code=1)
-
-        with async_mock.patch.object(
-            self.verifier, "pre_verify", async_mock.CoroutineMock()
-        ) as mock_pre_verify, async_mock.patch.object(
-            self.verifier, "non_revoc_intervals", async_mock.MagicMock()
-        ) as mock_non_revox:
-            verified = await self.verifier.verify_presentation(
-                INDY_PROOF_REQ_NAME,
-                INDY_PROOF_NAME,
-                "schemas",
-                "credential_definitions",
-                REV_REG_DEFS,
-                "rev_reg_entries",
-            )
-
-        mock_verify.assert_called_once_with(
-            json.dumps(INDY_PROOF_REQ_NAME),
-            json.dumps(INDY_PROOF_NAME),
-            json.dumps("schemas"),
-            json.dumps("credential_definitions"),
-            json.dumps(REV_REG_DEFS),
-            json.dumps("rev_reg_entries"),
-        )
-
-        assert not verified
-
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_check_encoding_attr(self, mock_verify):
-        mock_verify.return_value = True
-        verified = await self.verifier.verify_presentation(
+    async def test_check_timestamps(self):
+        # all clear, with timestamps
+        await self.verifier.check_timestamps(
+            self.ledger,
             INDY_PROOF_REQ_NAME,
             INDY_PROOF_NAME,
-            "schemas",
-            "credential_definitions",
             REV_REG_DEFS,
-            "rev_reg_entries",
         )
 
-        mock_verify.assert_called_once_with(
-            json.dumps(INDY_PROOF_REQ_NAME),
-            json.dumps(INDY_PROOF_NAME),
-            json.dumps("schemas"),
-            json.dumps("credential_definitions"),
-            json.dumps(REV_REG_DEFS),
-            json.dumps("rev_reg_entries"),
-        )
+        # timestamp for irrevocable credential
+        with async_mock.patch.object(
+            self.ledger,
+            "get_credential_definition",
+            async_mock.CoroutineMock(),
+        ) as mock_get_cred_def:
+            mock_get_cred_def.return_value = {
+                "...": "...",
+                "value": {"no": "revocation"},
+            }
+            with self.assertRaises(ValueError) as context:
+                await self.verifier.check_timestamps(
+                    self.ledger,
+                    INDY_PROOF_REQ_NAME,
+                    INDY_PROOF_NAME,
+                    REV_REG_DEFS,
+                )
+            assert "Timestamp in presentation identifier #" in str(context.exception)
 
-        assert verified is True
-
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_check_encoding_attr_tamper_raw(self, mock_verify):
-        INDY_PROOF_X = deepcopy(INDY_PROOF_NAME)
-        INDY_PROOF_X["requested_proof"]["revealed_attrs"]["19_uuid"][
-            "raw"
-        ] = "Mock chicken"
-
-        verified = await self.verifier.verify_presentation(
-            INDY_PROOF_REQ_NAME,
-            INDY_PROOF_X,
-            "schemas",
-            "credential_definitions",
+        # all clear, no timestamps
+        proof_x = deepcopy(INDY_PROOF_NAME)
+        proof_x["identifiers"][0]["timestamp"] = None
+        proof_x["identifiers"][0]["rev_reg_id"] = None
+        proof_req_x = deepcopy(INDY_PROOF_REQ_NAME)
+        proof_req_x.pop("non_revoked")
+        await self.verifier.check_timestamps(
+            self.ledger,
+            proof_req_x,
+            proof_x,
             REV_REG_DEFS,
-            "rev_reg_entries",
         )
 
-        mock_verify.assert_not_called()
+        # timestamp in the future
+        proof_req_x = deepcopy(INDY_PROOF_REQ_NAME)
+        proof_x = deepcopy(INDY_PROOF_NAME)
+        proof_x["identifiers"][0]["timestamp"] = int(time()) + 3600
+        with self.assertRaises(ValueError) as context:
+            await self.verifier.check_timestamps(
+                self.ledger,
+                proof_req_x,
+                proof_x,
+                REV_REG_DEFS,
+            )
+        assert "in the future" in str(context.exception)
 
-        assert verified is False
+        # timestamp in the distant past
+        proof_x["identifiers"][0]["timestamp"] = 1234567890
+        with self.assertRaises(ValueError) as context:
+            await self.verifier.check_timestamps(
+                self.ledger,
+                proof_req_x,
+                proof_x,
+                REV_REG_DEFS,
+            )
+        assert "predates rev reg" in str(context.exception)
 
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_check_encoding_attr_tamper_encoded(self, mock_verify):
-        INDY_PROOF_X = deepcopy(INDY_PROOF_NAME)
-        INDY_PROOF_X["requested_proof"]["revealed_attrs"]["19_uuid"][
-            "encoded"
-        ] = "1234567890"
+        # timestamp otherwise outside non-revocation interval: log and continue
+        proof_req_x = deepcopy(INDY_PROOF_REQ_NAME)
+        proof_req_x["non_revoked"] = {"from": 1600000000, "to": 1600001000}
+        proof_x["identifiers"][0]["timestamp"] = 1579890000
+        with async_mock.patch.object(
+            test_module, "LOGGER", async_mock.MagicMock()
+        ) as mock_logger:
+            pre_logger_calls = mock_logger.info.call_count
+            await self.verifier.check_timestamps(
+                self.ledger,
+                proof_req_x,
+                proof_x,
+                REV_REG_DEFS,
+            )
+            assert mock_logger.info.call_count == pre_logger_calls + 1
 
-        verified = await self.verifier.verify_presentation(
-            INDY_PROOF_REQ_NAME,
-            INDY_PROOF_X,
-            "schemas",
-            "credential_definitions",
-            REV_REG_DEFS,
-            "rev_reg_entries",
-        )
+        # superfluous timestamp
+        proof_req_x = deepcopy(INDY_PROOF_REQ_NAME)
+        proof_x = deepcopy(INDY_PROOF_NAME)
+        proof_req_x.pop("non_revoked")
+        with self.assertRaises(ValueError) as context:
+            await self.verifier.check_timestamps(
+                self.ledger,
+                proof_req_x,
+                proof_x,
+                REV_REG_DEFS,
+            )
+        assert "superfluous" in str(context.exception)
 
-        mock_verify.assert_not_called()
+        # missing revealed attr
+        proof_req_x = deepcopy(INDY_PROOF_REQ_NAME)
+        proof_x = deepcopy(INDY_PROOF_NAME)
+        proof_x["requested_proof"]["revealed_attrs"] = {}
+        with self.assertRaises(ValueError) as context:
+            await self.verifier.check_timestamps(
+                self.ledger,
+                proof_req_x,
+                proof_x,
+                REV_REG_DEFS,
+            )
+        assert "Presentation attributes mismatch requested" in str(context.exception)
 
-        assert verified is False
-
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_check_pred_names(self, mock_verify):
-        mock_verify.return_value = True
-        verified = await self.verifier.verify_presentation(
+        # all clear, attribute group ('names')
+        await self.verifier.check_timestamps(
+            self.ledger,
             INDY_PROOF_REQ_PRED_NAMES,
             INDY_PROOF_PRED_NAMES,
-            "schemas",
-            "credential_definitions",
             REV_REG_DEFS,
-            "rev_reg_entries",
         )
 
-        mock_verify.assert_called_once_with(
-            json.dumps(INDY_PROOF_REQ_PRED_NAMES),
-            json.dumps(INDY_PROOF_PRED_NAMES),
-            json.dumps("schemas"),
-            json.dumps("credential_definitions"),
-            json.dumps(REV_REG_DEFS),
-            json.dumps("rev_reg_entries"),
+        # missing revealed attr groups
+        proof_x = deepcopy(INDY_PROOF_PRED_NAMES)
+        proof_x["requested_proof"].pop("revealed_attr_groups")
+        with self.assertRaises(ValueError) as context:
+            await self.verifier.check_timestamps(
+                self.ledger,
+                INDY_PROOF_REQ_PRED_NAMES,
+                proof_x,
+                REV_REG_DEFS,
+            )
+        assert "Missing requested attribute group" in str(context.exception)
+
+        # superfluous timestamp, attr group
+        proof_x = deepcopy(INDY_PROOF_PRED_NAMES)
+        proof_req_x = deepcopy(INDY_PROOF_REQ_PRED_NAMES)
+        proof_req_x["requested_attributes"]["18_uuid"].pop("non_revoked")
+        proof_req_x["requested_predicates"]["18_id_GE_uuid"].pop("non_revoked")
+        proof_req_x["requested_predicates"]["18_busid_GE_uuid"].pop("non_revoked")
+        with self.assertRaises(ValueError) as context:
+            await self.verifier.check_timestamps(
+                self.ledger,
+                proof_req_x,
+                proof_x,
+                REV_REG_DEFS,
+            )
+        assert "is superfluous vs. requested" in str(context.exception)
+
+        # superfluous timestamp, predicates
+        proof_x = deepcopy(INDY_PROOF_PRED_NAMES)
+        proof_req_x = deepcopy(INDY_PROOF_REQ_PRED_NAMES)
+        proof_req_x["requested_predicates"]["18_id_GE_uuid"].pop("non_revoked")
+        proof_req_x["requested_predicates"]["18_busid_GE_uuid"].pop("non_revoked")
+        with self.assertRaises(ValueError) as context:
+            await self.verifier.check_timestamps(
+                self.ledger,
+                proof_req_x,
+                proof_x,
+                REV_REG_DEFS,
+            )
+        assert "is superfluous vs. requested predicate" in str(context.exception)
+
+    async def test_non_revoc_intervals(self):
+        big_pres_req = {
+            "nonce": "12301197819298309547817",
+            "name": "proof_req",
+            "version": "0.0",
+            "requested_attributes": {
+                "17_uuid": {
+                    "name": ["favouriteDrink"],
+                    "restrictions": [
+                        {"cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:17:tag"}
+                    ],
+                    "non_revoked": {"from": 1579892963, "to": 1579892963},
+                },
+                "18_uuid": {
+                    "names": [
+                        "effectiveDate",
+                        "jurisdictionId",
+                        "endDate",
+                        "legalName",
+                        "orgTypeId",
+                    ],
+                    "restrictions": [
+                        {"cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag"}
+                    ],
+                    "non_revoked": {"from": 1579892963, "to": 1579892963},
+                },
+            },
+            "requested_predicates": {
+                "18_id_GE_uuid": {
+                    "name": "id",
+                    "p_type": ">=",
+                    "p_value": 4,
+                    "restrictions": [
+                        {"cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag"}
+                    ],
+                    "non_revoked": {"from": 1579892963, "to": 1579892963},
+                },
+                "18_busid_GE_uuid": {
+                    "name": "busId",
+                    "p_type": ">=",
+                    "p_value": 11198760,
+                    "restrictions": [
+                        {"cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag"}
+                    ],
+                    "non_revoked": {"from": 1579892963, "to": 1579892963},
+                },
+            },
+            "non_revoked": {"from": 1579892963, "to": 1579892963},
+        }
+        big_pres = {
+            "proof": {
+                "proofs": [
+                    {
+                        "primary_proof": "...",
+                        "non_revoc_proof": "...",
+                    }
+                ],
+                "aggregated_proof": "...",
+            },
+            "requested_proof": {
+                "revealed_attrs": {
+                    "17_uuid": {
+                        "sub_proof_index": 0,
+                        "raw": "martini",
+                        "encoded": "943924110058781320304650334433495169960",
+                    }
+                },
+                "revealed_attr_groups": {
+                    "18_uuid": {
+                        "sub_proof_index": 1,
+                        "values": {
+                            "effectiveDate": {
+                                "raw": "2018-01-01",
+                                "encoded": "200737126045061047957925549204159",
+                            },
+                            "endDate": {
+                                "raw": "",
+                                "encoded": "10993379397001115665086549",
+                            },
+                            "jurisdictionId": {"raw": "1", "encoded": "1"},
+                            "legalName": {
+                                "raw": "Flan Nebula",
+                                "encoded": "119967766011746391966411797095112",
+                            },
+                            "orgTypeId": {"raw": "2", "encoded": "2"},
+                        },
+                    }
+                },
+                "self_attested_attrs": {},
+                "unrevealed_attrs": {},
+                "predicates": {
+                    "18_busid_GE_uuid": {"sub_proof_index": 1},
+                    "18_id_GE_uuid": {"sub_proof_index": 1},
+                },
+            },
+            "identifiers": [
+                {
+                    "schema_id": "LjgpST2rjsoxYegQDRm7EL:2:bc-reg:1.0",
+                    "cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:17:tag",
+                    "rev_reg_id": None,
+                    "timestamp": None,
+                },
+                {
+                    "schema_id": "LjgpST2rjsoxYegQDRm7EL:2:bc-reg:1.0",
+                    "cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag",
+                    "rev_reg_id": None,
+                    "timestamp": None,
+                },
+            ],
+        }
+
+        self.verifier.non_revoc_intervals(big_pres_req, big_pres)
+
+        assert "non_revoked" not in big_pres_req
+        for spec in big_pres_req["requested_attributes"].values():
+            assert "non_revoked" not in spec
+        for spec in big_pres_req["requested_predicates"].values():
+            assert "non_revoked" not in spec
+
+    async def test_pre_verify(self):
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                None, {"requested_proof": "...", "proof": "..."}
+            )
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                {"requested_predicates": "...", "requested_attributes": "..."},
+                None,
+            )
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                {"requested_predicates": "...", "requested_attributes": "..."},
+                {"requested_proof": "..."},
+            )
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                {"requested_predicates": "...", "requested_attributes": "..."},
+                {"proof": "..."},
+            )
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                {
+                    "requested_predicates": {"0_name_uuid": "..."},
+                    "requested_attributes": "...",
+                },
+                INDY_PROOF_PRED_NAMES,
+            )
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                INDY_PROOF_REQ_NAME,
+                {
+                    "proof": "...",
+                    "requested_proof": {
+                        "revealed_attrs": {},
+                        "self_attested_attrs": {"19_uuid": "Chicken Hawk"},
+                        "unrevealed_attrs": {},
+                        "predicates": {},
+                    },
+                    "identifiers": [
+                        {
+                            "schema_id": "LjgpST2rjsoxYegQDRm7EL:2:non-revo:1579888926.0",
+                            "cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:19:tag",
+                            "rev_reg_id": "LjgpST2rjsoxYegQDRm7EL:4:LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag:CL_ACCUM:0",
+                            "timestamp": 1579892963,
+                        }
+                    ],
+                },
+            )
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                {
+                    "nonce": "15606741555044336341559",
+                    "name": "proof_req",
+                    "version": "0.0",
+                    "requested_attributes": {"19_uuid": {"name": "Preferred Name"}},
+                    "requested_predicates": {},
+                },
+                {
+                    "proof": "...",
+                    "requested_proof": {
+                        "revealed_attrs": {},
+                        "self_attested_attrs": {},
+                        "unrevealed_attrs": {},
+                        "predicates": {},
+                    },
+                    "identifiers": [
+                        {
+                            "schema_id": "LjgpST2rjsoxYegQDRm7EL:2:non-revo:1579888926.0",
+                            "cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:19:tag",
+                            "rev_reg_id": "LjgpST2rjsoxYegQDRm7EL:4:LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag:CL_ACCUM:0",
+                            "timestamp": 1579892963,
+                        }
+                    ],
+                },
+            )
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                {
+                    "nonce": "15606741555044336341559",
+                    "name": "proof_req",
+                    "version": "0.0",
+                    "requested_attributes": {
+                        "19_uuid": {"neither-name-nor-names": "Preferred Name"}
+                    },
+                    "requested_predicates": {},
+                },
+                {
+                    "proof": "...",
+                    "requested_proof": {
+                        "revealed_attrs": {
+                            "19_uuid": {
+                                "sub_proof_index": 0,
+                                "raw": "Chicken Hawk",
+                                "encoded": "94607763023542937648705576709896212619553924110058781320304650334433495169960",
+                            }
+                        },
+                        "self_attested_attrs": {},
+                        "unrevealed_attrs": {},
+                        "predicates": {},
+                    },
+                    "identifiers": [
+                        {
+                            "schema_id": "LjgpST2rjsoxYegQDRm7EL:2:non-revo:1579888926.0",
+                            "cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:19:tag",
+                            "rev_reg_id": "LjgpST2rjsoxYegQDRm7EL:4:LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag:CL_ACCUM:0",
+                            "timestamp": 1579892963,
+                        }
+                    ],
+                },
+            )
+        with self.assertRaises(ValueError):
+            await self.verifier.pre_verify(
+                INDY_PROOF_REQ_NAME,
+                {
+                    "proof": {
+                        "proofs": [
+                            {
+                                "primary_proof": {
+                                    "eq_proof": {
+                                        "revealed_attrs": {"otherthing": "..."},
+                                        "...": "...",
+                                    },
+                                    "ge_proofs": [],
+                                },
+                                "...": "...",
+                            }
+                        ],
+                        "...": "...",
+                    },
+                    "requested_proof": {
+                        "revealed_attrs": {
+                            "19_uuid": {
+                                "sub_proof_index": 0,
+                                "raw": "Chicken Hawk",
+                                "encoded": "94607763023542937648705576709896212619553924110058781320304650334433495169960",
+                            }
+                        },
+                        "self_attested_attrs": {},
+                        "unrevealed_attrs": {},
+                        "predicates": {},
+                    },
+                    "identifiers": [
+                        {
+                            "schema_id": "LjgpST2rjsoxYegQDRm7EL:2:non-revo:1579888926.0",
+                            "cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:19:tag",
+                            "rev_reg_id": "LjgpST2rjsoxYegQDRm7EL:4:LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag:CL_ACCUM:0",
+                            "timestamp": 1579892963,
+                        }
+                    ],
+                },
+            )
+        await self.verifier.pre_verify(
+            {
+                "nonce": "15606741555044336341559",
+                "name": "proof_req",
+                "version": "0.0",
+                "requested_attributes": {"19_uuid": {"name": "Preferred Name"}},
+                "requested_predicates": {},
+            },
+            {
+                "proof": "...",
+                "requested_proof": {
+                    "revealed_attrs": {},
+                    "self_attested_attrs": {"19_uuid": "Chicken Hawk"},
+                    "unrevealed_attrs": {},
+                    "predicates": {},
+                },
+                "identifiers": [
+                    {
+                        "schema_id": "LjgpST2rjsoxYegQDRm7EL:2:non-revo:1579888926.0",
+                        "cred_def_id": "LjgpST2rjsoxYegQDRm7EL:3:CL:19:tag",
+                        "rev_reg_id": "LjgpST2rjsoxYegQDRm7EL:4:LjgpST2rjsoxYegQDRm7EL:3:CL:18:tag:CL_ACCUM:0",
+                        "timestamp": 1579892963,
+                    }
+                ],
+            },
         )
-
-        assert verified is True
-
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_check_pred_names_tamper_pred_value(self, mock_verify):
-        INDY_PROOF_X = deepcopy(INDY_PROOF_PRED_NAMES)
-        INDY_PROOF_X["proof"]["proofs"][0]["primary_proof"]["ge_proofs"][0][
-            "predicate"
-        ]["value"] = 0
-
-        verified = await self.verifier.verify_presentation(
-            INDY_PROOF_REQ_PRED_NAMES,
-            INDY_PROOF_X,
-            "schemas",
-            "credential_definitions",
-            REV_REG_DEFS,
-            "rev_reg_entries",
-        )
-
-        mock_verify.assert_not_called()
-
-        assert verified is False
-
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_check_pred_names_tamper_pred_req_attr(self, mock_verify):
-        INDY_PROOF_REQ_X = deepcopy(INDY_PROOF_REQ_PRED_NAMES)
-        INDY_PROOF_REQ_X["requested_predicates"]["18_busid_GE_uuid"]["name"] = "dummy"
-
-        verified = await self.verifier.verify_presentation(
-            INDY_PROOF_REQ_X,
-            INDY_PROOF_PRED_NAMES,
-            "schemas",
-            "credential_definitions",
-            REV_REG_DEFS,
-            "rev_reg_entries",
-        )
-
-        mock_verify.assert_not_called()
-
-        assert verified is False
-
-    @async_mock.patch("indy.anoncreds.verifier_verify_proof")
-    async def test_check_pred_names_tamper_attr_groups(self, mock_verify):
-        INDY_PROOF_X = deepcopy(INDY_PROOF_PRED_NAMES)
-        INDY_PROOF_X["requested_proof"]["revealed_attr_groups"][
-            "x_uuid"
-        ] = INDY_PROOF_X["requested_proof"]["revealed_attr_groups"].pop("18_uuid")
-
-        verified = await self.verifier.verify_presentation(
-            INDY_PROOF_REQ_PRED_NAMES,
-            INDY_PROOF_X,
-            "schemas",
-            "credential_definitions",
-            REV_REG_DEFS,
-            "rev_reg_entries",
-        )
-
-        mock_verify.assert_not_called()
-
-        assert verified is False
