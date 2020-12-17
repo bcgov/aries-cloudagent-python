@@ -9,7 +9,6 @@ from ....indy.issuer import IndyIssuer, IndyIssuerError
 from ....indy.util import indy_client_dir
 from ....ledger.base import BaseLedger
 from ....tails.base import BaseTailsServer
-from ....wallet.did_info import DIDInfo
 
 from ...error import RevocationError
 

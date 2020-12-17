@@ -1,17 +1,12 @@
-import json
 import pytest
 
 from asynctest import mock as async_mock, TestCase as AsyncTestCase
-from indy.error import IndyError, ErrorCode
 
 from ...core.in_memory import InMemoryProfile
 from ...ledger.base import BaseLedger
 from ...storage.error import StorageNotFoundError
-from ...wallet.base import BaseWallet
-from ...wallet.indy import IndySdkWallet
 
 from ..error import (
-    RevocationError,
     RevocationNotSupportedError,
     RevocationRegistryBadSizeError,
 )

@@ -2,20 +2,12 @@ import json
 
 from asynctest import mock as async_mock
 from asynctest import TestCase as AsyncTestCase
-from copy import deepcopy
-from time import time
 
 from ...core.in_memory import InMemoryProfile
-from ...indy.holder import IndyHolder
 from ...indy.issuer import IndyIssuer
-from ...messaging.credential_definitions.util import CRED_DEF_SENT_RECORD_TYPE
-from ...messaging.request_context import RequestContext
 from ...protocols.issue_credential.v1_0.models.credential_exchange import (
     V10CredentialExchange,
 )
-from ...ledger.base import BaseLedger
-from ...storage.base import StorageRecord
-from ...storage.error import StorageNotFoundError
 
 from ..manager import RevocationManager, RevocationManagerError
 
