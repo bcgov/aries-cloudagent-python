@@ -4,6 +4,7 @@ import logging
 import jwt
 from typing import List, Optional, cast
 
+from .cache import ProfileCache
 from ..core.profile import (
     Profile,
     ProfileSession,
@@ -47,7 +48,7 @@ class MultitenantManager:
         if not profile:
             raise MultitenantManagerError("Missing profile")
 
-        self._instances: dict[str, Profile] = {}
+        self._profiles = ProfileCache(100)
 
     @property
     def profile(self) -> Profile:
@@ -118,7 +119,7 @@ class MultitenantManager:
         """
         wallet_id = wallet_record.wallet_id
 
-        if wallet_id not in self._instances:
+        if not self._profiles.has(wallet_id):
             # Extend base context
             context = base_context.copy()
 
@@ -156,9 +157,9 @@ class MultitenantManager:
 
             # MTODO: add ledger config
             profile, _ = await wallet_config(context, provision=provision)
-            self._instances[wallet_id] = profile
+            await self._profiles.put(wallet_id, profile)
 
-        return self._instances[wallet_id]
+        return self._profiles.get(wallet_id)
 
     async def create_wallet(
         self,
@@ -251,7 +252,7 @@ class MultitenantManager:
                 {"wallet.key": wallet_key},
             )
 
-            del self._instances[wallet_id]
+            self._profiles.remove(wallet_id)
             await profile.remove()
 
             # Remove all routing records associated with wallet

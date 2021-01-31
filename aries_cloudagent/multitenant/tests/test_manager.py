@@ -54,7 +54,7 @@ class TestMultitenantManager(AsyncTestCase):
 
     async def test_get_wallet_profile_returns_from_cache(self):
         wallet_record = WalletRecord(wallet_id="test")
-        self.manager._instances["test"] = InMemoryProfile.test_profile()
+        await self.manager._profiles.put("test", InMemoryProfile.test_profile())
 
         with async_mock.patch(
             "aries_cloudagent.config.wallet.wallet_config"
@@ -62,12 +62,12 @@ class TestMultitenantManager(AsyncTestCase):
             profile = await self.manager.get_wallet_profile(
                 self.profile.context, wallet_record
             )
-            assert profile is self.manager._instances["test"]
+            assert profile is self.manager._profiles.get("test")
             wallet_config.assert_not_called()
 
     async def test_get_wallet_profile_not_in_cache(self):
         wallet_record = WalletRecord(wallet_id="test", settings={})
-        self.manager._instances["test"] = InMemoryProfile.test_profile()
+        await self.manager._profiles.put("test", InMemoryProfile.test_profile())
 
         with async_mock.patch(
             "aries_cloudagent.config.wallet.wallet_config"
@@ -75,7 +75,7 @@ class TestMultitenantManager(AsyncTestCase):
             profile = await self.manager.get_wallet_profile(
                 self.profile.context, wallet_record
             )
-            assert profile is self.manager._instances["test"]
+            assert profile is self.manager._profiles.get("test")
             wallet_config.assert_not_called()
 
     async def test_get_wallet_profile_settings(self):
@@ -382,13 +382,13 @@ class TestMultitenantManager(AsyncTestCase):
             )
             wallet_profile = InMemoryProfile.test_profile()
 
-            self.manager._instances["test"] = wallet_profile
+            await self.manager._profiles.put("test", wallet_profile)
             retrieve_by_id.return_value = wallet_record
             get_wallet_profile.return_value = wallet_profile
 
             await self.manager.remove_wallet("test")
 
-            assert "test" not in self.manager._instances
+            assert not self.manager._profiles.has("test")
             get_wallet_profile.assert_called_once_with(
                 self.profile.context, wallet_record, {"wallet.key": "test_key"}
             )
