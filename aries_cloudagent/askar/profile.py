@@ -220,17 +220,21 @@ class AskarProfileSession(ProfileSession):
 class AskarProfileManager(ProfileManager):
     """Manager for Aries-Askar stores."""
 
-    async def provision(self, config: Mapping[str, Any] = None) -> Profile:
+    async def provision(
+        self, context: InjectionContext, config: Mapping[str, Any] = None
+    ) -> Profile:
         """Provision a new instance of a profile."""
         store_config = AskarStoreConfig(config)
         opened = await store_config.open_store(provision=True)
-        return AskarProfile(opened, self.context)
+        return AskarProfile(opened, context)
 
-    async def open(self, config: Mapping[str, Any] = None) -> Profile:
+    async def open(
+        self, context: InjectionContext, config: Mapping[str, Any] = None
+    ) -> Profile:
         """Open an instance of an existing profile."""
         store_config = AskarStoreConfig(config)
         opened = await store_config.open_store(provision=False)
-        return AskarProfile(opened, self.context)
+        return AskarProfile(opened, context)
 
     @classmethod
     async def generate_store_key(self, seed: str = None) -> str:

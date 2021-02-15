@@ -5,6 +5,7 @@ from asynctest import mock as async_mock
 from aries_askar import StoreError, StoreErrorCode
 
 from ...askar.profile import AskarProfileManager
+from ...config.injection_context import InjectionContext
 from ...core.in_memory import InMemoryProfile
 from ...ledger.endpoint_type import EndpointType
 
@@ -24,14 +25,16 @@ async def in_memory_wallet():
 
 @pytest.fixture()
 async def wallet():
+    context = InjectionContext()
     profile = await AskarProfileManager().provision(
+        context,
         {
             # "auto_recreate": True,
             # "auto_remove": True,
             "name": ":memory:",
             "key": await AskarProfileManager.generate_store_key(),
             "key_derivation_method": "RAW",  # much faster than using argon-hashed keys
-        }
+        },
     )
     async with profile.session() as session:
         yield session.inject(BaseWallet)

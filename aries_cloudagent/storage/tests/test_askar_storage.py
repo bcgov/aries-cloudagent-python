@@ -5,6 +5,7 @@ import os
 from asynctest import mock as async_mock
 
 from ...askar.profile import AskarProfileManager
+from ...config.injection_context import InjectionContext
 
 from ..askar import AskarStorage
 from ..base import BaseStorage
@@ -17,14 +18,16 @@ from . import test_in_memory_storage
 
 @pytest.fixture()
 async def store():
+    context = InjectionContext()
     profile = await AskarProfileManager().provision(
+        context,
         {
             # "auto_recreate": True,
             # "auto_remove": True,
             "name": ":memory:",
             "key": await AskarProfileManager.generate_store_key(),
             "key_derivation_method": "RAW",  # much faster than using argon-hashed keys
-        }
+        },
     )
     async with profile.session() as session:
         yield session.inject(BaseStorage)
