@@ -8,7 +8,7 @@ from typing import Mapping
 
 from ..ledger.base import BaseLedger
 from ..messaging.util import canon, encode
-from ..protocols.present_proof.v1_0.util.indy import indy_proof_req2non_revoc_intervals
+from ..protocols.present_proof.indy.xform import indy_proof_req2non_revoc_intervals
 
 LOGGER = logging.getLogger(__name__)
 
