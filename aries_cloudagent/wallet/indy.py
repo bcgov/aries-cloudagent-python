@@ -2,7 +2,7 @@
 
 import json
 
-from typing import Sequence
+from typing import Sequence, Tuple
 
 import indy.anoncreds
 import indy.did
@@ -163,7 +163,11 @@ class IndySdkWallet(BaseWallet):
             ) from x_indy
 
     async def create_local_did(
-        self, seed: str = None, did: str = None, metadata: dict = None
+        self,
+        seed: str = None,
+        did: str = None,
+        method_name: str = None,
+        metadata: dict = None,
     ) -> DIDInfo:
         """
         Create and store a new local DID.
@@ -171,6 +175,7 @@ class IndySdkWallet(BaseWallet):
         Args:
             seed: Optional seed to use for DID
             did: The DID to use
+            method_name: The DID method to use
             metadata: Metadata to store with DID
 
         Returns:
@@ -186,6 +191,9 @@ class IndySdkWallet(BaseWallet):
             cfg["seed"] = bytes_to_b64(validate_seed(seed))
         if did:
             cfg["did"] = did
+        if method_name:
+            # FIXME - use an application default method if not specified?
+            cfg["method_name"] = method_name
         did_json = json.dumps(cfg)
         # crypto_type, cid - optional parameters skipped
         try:
@@ -434,7 +442,7 @@ class IndySdkWallet(BaseWallet):
 
         return result
 
-    async def unpack_message(self, enc_message: bytes) -> (str, str, str):
+    async def unpack_message(self, enc_message: bytes) -> Tuple[str, str, str]:
         """
         Unpack a message.
 

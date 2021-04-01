@@ -20,7 +20,7 @@ limitations under the License.
 
 from typing import List, Sequence, Union
 
-from .util import canon_did, canon_ref
+from .util import canon_ref
 from .publickey import PublicKey
 
 
@@ -62,7 +62,7 @@ class Service:
 
         """
 
-        self._did = canon_did(did)
+        self._did = did
         self._id = canon_ref(self._did, ident, ";")
         self._type = typ
         self._recip_keys = (

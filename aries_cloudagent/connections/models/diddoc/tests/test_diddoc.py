@@ -16,12 +16,10 @@ limitations under the License.
 """
 
 
-import json
-
-from asynctest import TestCase as AsyncTestCase, mock as async_mock
+from asynctest import TestCase as AsyncTestCase
 
 from .. import DIDDoc, PublicKey, PublicKeyType, Service
-from ..util import canon_did, canon_ref
+from ..util import canon_ref
 
 
 class TestDIDDoc(AsyncTestCase):
@@ -67,7 +65,7 @@ class TestDIDDoc(AsyncTestCase):
         }
 
         dd = DIDDoc.deserialize(dd_in)
-        assert str(dd) == f"DIDDoc({canon_did(dd_in['id'])})"
+        assert str(dd) == f"DIDDoc({dd_in['id']})"
         assert len(dd.pubkey) == len(dd_in["publicKey"])
         assert len(dd.authnkey) == len(dd_in["authentication"])
 
@@ -97,7 +95,6 @@ class TestDIDDoc(AsyncTestCase):
 
         # Exercise accessors
         dd.did = dd_out["id"]
-        assert dd.did == canon_did(dd_out["id"])
         with self.assertRaises(ValueError):
             dd.set(["neither a service", "nor a public key"])
         assert dd.service[[k for k in dd.service][0]].did == dd.did
@@ -198,50 +195,21 @@ class TestDIDDoc(AsyncTestCase):
         # print('\n\n== 5 == DID Doc on canonical refs: {}'.format(ppjson(dd_out)))
 
     def test_minimal(self):
-        # Minimal as per indy-agent test suite without explicit identifiers
-        dd_in = {
-            "@context": "https://w3id.org/did/v1",
-            "publicKey": [
-                {
-                    "id": "LjgpST2rjsoxYegQDRm7EL#keys-1",
-                    "type": "Ed25519VerificationKey2018",
-                    "controller": "LjgpST2rjsoxYegQDRm7EL",
-                    "publicKeyBase58": "~XXXXXXXXXXXXXXXX",
-                }
-            ],
-            "service": [
-                {
-                    "type": "DidMessaging",
-                    "recipientKeys": ["~XXXXXXXXXXXXXXXX"],
-                    "serviceEndpoint": "https://www.von.ca",
-                }
-            ],
-        }
-
-        dd = DIDDoc.deserialize(dd_in)
-        assert len(dd.pubkey) == len(dd_in["publicKey"])
-        assert len(dd.authnkey) == 0
-
-        dd_out = dd.serialize()
-        # print('\n\n== 6 == DID Doc miminal style, implcit DID document identifier: {}'.format(
-        #    ppjson(dd_out)))
-
-    def test_minimal_ids(self):
         # Minimal + ids as per indy-agent test suite with explicit identifiers; novel service recipient key on raw base58
         dd_in = {
             "@context": "https://w3id.org/did/v1",
-            "id": "LjgpST2rjsoxYegQDRm7EL",
+            "id": "did:sov:LjgpST2rjsoxYegQDRm7EL",
             "publicKey": [
                 {
-                    "id": "LjgpST2rjsoxYegQDRm7EL#keys-1",
+                    "id": "did:sov:LjgpST2rjsoxYegQDRm7EL#keys-1",
                     "type": "Ed25519VerificationKey2018",
-                    "controller": "LjgpST2rjsoxYegQDRm7EL",
+                    "controller": "did:sov:LjgpST2rjsoxYegQDRm7EL",
                     "publicKeyBase58": "~XXXXXXXXXXXXXXXX",
                 }
             ],
             "service": [
                 {
-                    "id": "LjgpST2rjsoxYegQDRm7EL;indy",
+                    "id": "did:sov:LjgpST2rjsoxYegQDRm7EL;indy",
                     "type": "DidMessaging",
                     "priority": 1,
                     "recipientKeys": ["~YYYYYYYYYYYYYYYY"],
@@ -262,24 +230,24 @@ class TestDIDDoc(AsyncTestCase):
         # Minimal + ids as per indy-agent test suite with explicit identifiers; novel service recipient key on raw base58
         dd_in = {
             "@context": "https://w3id.org/did/v1",
-            "id": "LjgpST2rjsoxYegQDRm7EL",
+            "id": "did:sov:LjgpST2rjsoxYegQDRm7EL",
             "publicKey": [
                 {
-                    "id": "LjgpST2rjsoxYegQDRm7EL#keys-1",
+                    "id": "did:sov:LjgpST2rjsoxYegQDRm7EL#keys-1",
                     "type": "Ed25519VerificationKey2018",
-                    "controller": "LjgpST2rjsoxYegQDRm7EL",
+                    "controller": "did:sov:LjgpST2rjsoxYegQDRm7EL",
                     "publicKeyBase58": "~XXXXXXXXXXXXXXXX",
                 },
                 {
-                    "id": "LjgpST2rjsoxYegQDRm7EL#keys-2",
+                    "id": "did:sov:LjgpST2rjsoxYegQDRm7EL#keys-2",
                     "type": "Ed25519VerificationKey2018",
-                    "controller": "LjgpST2rjsoxYegQDRm7EL",
+                    "controller": "did:sov:LjgpST2rjsoxYegQDRm7EL",
                     "publicKeyBase58": "~YYYYYYYYYYYYYYYY",
                 },
                 {
-                    "id": "LjgpST2rjsoxYegQDRm7EL#keys-3",
+                    "id": "did:sov:LjgpST2rjsoxYegQDRm7EL#keys-3",
                     "type": "Secp256k1VerificationKey2018",
-                    "controller": "LjgpST2rjsoxYegQDRm7EL",
+                    "controller": "did:sov:LjgpST2rjsoxYegQDRm7EL",
                     "publicKeyHex": "02b97c30de767f084ce3080168ee293053ba33b235d7116a3263d29f1450936b71",
                 },
                 {
@@ -291,7 +259,7 @@ class TestDIDDoc(AsyncTestCase):
             ],
             "service": [
                 {
-                    "id": "LjgpST2rjsoxYegQDRm7EL;indy",
+                    "id": "did:sov:LjgpST2rjsoxYegQDRm7EL;indy",
                     "type": "DidMessaging",
                     "priority": 0,
                     "recipientKeys": ["~ZZZZZZZZZZZZZZZZ"],
@@ -306,7 +274,7 @@ class TestDIDDoc(AsyncTestCase):
                         "did:sov:LjgpST2rjsoxYegQDRm7EL#keys-1",
                     ],
                     "routingKeys": ["did:sov:LjgpST2rjsoxYegQDRm7EL#keys-4"],
-                    "serviceEndpoint": "LjgpST2rjsoxYegQDRm7EL;2",
+                    "serviceEndpoint": "did:sov:LjgpST2rjsoxYegQDRm7EL;2",
                 },
                 {
                     "id": "2",
@@ -342,7 +310,7 @@ class TestDIDDoc(AsyncTestCase):
             )
         )
 
-        dd_out = dd.serialize()
+        _ = dd.serialize()
         # print('\n\n== 8 == DID Doc on mixed service routing and recipient keys: {}'.format(ppjson(dd_out)))
 
         pk = PublicKey(
@@ -447,22 +415,6 @@ class TestDIDDoc(AsyncTestCase):
         with self.assertRaises(ValueError):
             dd = DIDDoc.deserialize(dd_in)
         # print('\n\n== 12 == DID Doc without identifier rejected as expected')
-
-    def test_canon_did(self):
-        # Exercise reference canonicalization, including failure paths
-        valid_did = "LjgpST2rjsoxYegQDRm7EL"
-
-        with self.assertRaises(ValueError):
-            canon_ref("not-a-DID", ref=valid_did, delimiter="#")
-
-        with self.assertRaises(ValueError):
-            canon_ref(valid_did, ref="did:sov:not-a-DID", delimiter="#")
-
-        urlref = (
-            "https://www.clafouti-quasar.ca:8443/supply-management/fruit/index.html"
-        )
-        assert canon_ref(valid_did, ref=urlref) == urlref
-        # print('\n\n== 13 == Reference canonicalization operates as expected')
 
     def test_pubkey_type(self):
         dd_in = {

@@ -94,7 +94,7 @@ class TestHttpTransport(AioHTTPTestCase):
 
         transport = HttpTransport()
 
-        self.profile.settings["emit_new_didcomm_mime_type"] = True
+        self.profile.settings["aip_version"] = 2
         await asyncio.wait_for(
             send_message(transport, b"{}", endpoint=server_addr), 5.0
         )

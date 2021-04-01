@@ -26,7 +26,7 @@ class DIDCommPrefix(Enum):
 
         environ["DIDCOMM_PREFIX"] = (
             DIDCommPrefix.NEW.value
-            if settings.get("emit_new_didcomm_prefix")
+            if settings.get("aip_version", 1) >= 2
             else DIDCommPrefix.OLD.value
         )
 

@@ -38,30 +38,6 @@ def resource(ref: str, delimiter: str = None) -> str:
     return ref.split(delimiter if delimiter else "#")[0]
 
 
-def canon_did(uri: str) -> str:
-    """
-    Convert a URI into a DID if need be, left-stripping 'did:sov:' if present.
-
-    Args:
-        uri: input URI or DID
-
-    Raises:
-        ValueError: for invalid input.
-
-    """
-
-    if ok_did(uri):
-        return uri
-
-    if uri.startswith("did:sov:"):
-        rv = uri[8:]
-        if ok_did(rv):
-            return rv
-    raise ValueError(
-        "Bad specification {} does not correspond to a sovrin DID".format(uri)
-    )
-
-
 def canon_ref(did: str, ref: str, delimiter: str = None):
     """
     Given a reference in a DID document, return it in its canonical form of a URI.
@@ -74,27 +50,13 @@ def canon_ref(did: str, ref: str, delimiter: str = None):
             introducing identifier (';') against DID resource
     """
 
-    if not ok_did(did):
-        raise ValueError("Bad DID {} cannot act as DID document identifier".format(did))
-
-    if ok_did(ref):  # e.g., LjgpST2rjsoxYegQDRm7EL
-        return "did:sov:{}".format(did)
-
-    if ok_did(resource(ref, delimiter)):  # e.g., LjgpST2rjsoxYegQDRm7EL#keys-1
-        return "did:sov:{}".format(ref)
-
-    if ref.startswith(
-        "did:sov:"
-    ):  # e.g., did:sov:LjgpST2rjsoxYegQDRm7EL, did:sov:LjgpST2rjsoxYegQDRm7EL#3
-        rv = ref[8:]
-        if ok_did(resource(rv, delimiter)):
-            return ref
-        raise ValueError("Bad URI {} does not correspond to a sovrin DID".format(ref))
-
-    if urlparse(ref).scheme:  # e.g., https://example.com/messages/8377464
+    if (
+        ref.startswith("did:")
+        or urlparse(ref).scheme  # e.g., https://example.com/messages/8377464
+    ):
         return ref
 
-    return "did:sov:{}{}{}".format(did, delimiter if delimiter else "#", ref)  # e.g., 3
+    return "{}{}{}".format(did, delimiter if delimiter else "#", ref)
 
 
 def ok_did(token: str) -> bool:

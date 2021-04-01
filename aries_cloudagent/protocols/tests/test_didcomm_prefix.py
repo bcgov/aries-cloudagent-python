@@ -10,13 +10,13 @@ class TestDIDCommPrefix(AsyncTestCase):
         DIDCommPrefix.set({})
         assert environ.get("DIDCOMM_PREFIX") == DIDCommPrefix.OLD.value
 
-        DIDCommPrefix.set({"emit_new_didcomm_prefix": True})
+        DIDCommPrefix.set({"aip_version": 2})
         assert environ.get("DIDCOMM_PREFIX") == DIDCommPrefix.NEW.value
         assert DIDCommPrefix.qualify_current("hello") == (
             f"{DIDCommPrefix.NEW.value}/hello"
         )
 
-        DIDCommPrefix.set({"emit_new_didcomm_prefix": False})
+        DIDCommPrefix.set({"aip_version": 1})
         assert environ.get("DIDCOMM_PREFIX") == DIDCommPrefix.OLD.value
         assert DIDCommPrefix.qualify_current("hello") == (
             f"{DIDCommPrefix.OLD.value}/hello"

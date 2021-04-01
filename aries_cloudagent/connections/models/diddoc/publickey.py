@@ -21,7 +21,7 @@ limitations under the License.
 from collections import namedtuple
 from enum import Enum
 
-from .util import canon_did, canon_ref
+from .util import canon_ref
 
 
 LinkedDataKeySpec = namedtuple("LinkedDataKeySpec", "ver_type authn_type specifier")
@@ -126,11 +126,11 @@ class PublicKey:
 
         """
 
-        self._did = canon_did(did)
+        self._did = did
         self._id = canon_ref(self._did, ident)
         self._value = value
         self._type = pk_type or PublicKeyType.ED25519_SIG_2018
-        self._controller = canon_did(controller) if controller else self._did
+        self._controller = controller or self._did
         self._authn = authn
 
     @property

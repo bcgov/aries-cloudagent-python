@@ -78,8 +78,10 @@ def load_argument_groups(parser: ArgumentParser, *groups: Type[ArgumentGroup]):
             for group in group_inst:
                 settings.update(group.get_settings(args))
         except ArgsParseError as e:
-            parser.print_help()
-            raise e
+            # this is defined to exit or raise an exception and is
+            # consistent with an error being raised while the arguments
+            # are being parsed
+            parser.error(str(e))
         return settings
 
     return get_settings
@@ -652,6 +654,13 @@ class ProtocolGroup(ArgumentGroup):
     def add_arguments(self, parser: ArgumentParser):
         """Add protocol-specific command line arguments to the parser."""
         parser.add_argument(
+            "--aip-version",
+            type=BoundedInt(1, 2),
+            default=1,
+            env_var="ACAPY_AIP_VERSION",
+            help="Set the Aries Interop Profile compatibility version (default 1).",
+        )
+        parser.add_argument(
             "--auto-ping-connection",
             action="store_true",
             env_var="ACAPY_AUTO_PING_CONNECTION",
@@ -726,22 +735,6 @@ class ProtocolGroup(ArgumentGroup):
             help="Keep credential exchange records after exchange has completed.",
         )
         parser.add_argument(
-            "--emit-new-didcomm-prefix",
-            action="store_true",
-            env_var="ACAPY_EMIT_NEW_DIDCOMM_PREFIX",
-            help="Emit protocol messages with new DIDComm prefix; i.e.,\
-            'https://didcomm.org/' instead of (default) prefix\
-            'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/'.",
-        )
-        parser.add_argument(
-            "--emit-new-didcomm-mime-type",
-            action="store_true",
-            env_var="ACAPY_EMIT_NEW_DIDCOMM_MIME_TYPE",
-            help="Send packed agent messages with the DIDComm MIME type\
-            as of RFC 0044; i.e., 'application/didcomm-envelope-enc'\
-            instead of 'application/ssi-agent-wire'.",
-        )
-        parser.add_argument(
             "--exch-use-unencrypted-tags",
             action="store_true",
             env_var="ACAPY_EXCH_USE_UNENCRYPTED_TAGS",
@@ -752,6 +745,7 @@ class ProtocolGroup(ArgumentGroup):
     def get_settings(self, args: Namespace) -> dict:
         """Get protocol settings."""
         settings = {}
+        settings["aip_version"] = args.aip_version
         if args.auto_ping_connection:
             settings["auto_ping_connection"] = True
         if args.invite_base_url:
@@ -796,10 +790,6 @@ class ProtocolGroup(ArgumentGroup):
                 raise ArgsParseError("Error writing trace event " + str(e))
         if args.preserve_exchange_records:
             settings["preserve_exchange_records"] = True
-        if args.emit_new_didcomm_prefix:
-            settings["emit_new_didcomm_prefix"] = True
-        if args.emit_new_didcomm_mime_type:
-            settings["emit_new_didcomm_mime_type"] = True
         if args.exch_use_unencrypted_tags:
             settings["exch_use_unencrypted_tags"] = True
             environ["EXCH_UNENCRYPTED_TAGS"] = "True"

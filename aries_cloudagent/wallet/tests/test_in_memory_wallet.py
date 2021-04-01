@@ -142,7 +142,7 @@ class TestInMemoryWallet:
     @pytest.mark.asyncio
     async def test_local_metadata(self, wallet):
         info = await wallet.create_local_did(
-            self.test_seed, self.test_did, self.test_metadata
+            self.test_seed, self.test_did, None, self.test_metadata
         )
         assert info.did == self.test_did
         assert info.verkey == self.test_verkey
@@ -167,7 +167,7 @@ class TestInMemoryWallet:
     @pytest.mark.asyncio
     async def test_create_public_did(self, wallet):
         info = await wallet.create_local_did(
-            self.test_seed, self.test_did, self.test_metadata
+            self.test_seed, self.test_did, None, self.test_metadata
         )
         assert not info.metadata.get("public")
         assert not info.metadata.get("posted")
@@ -193,7 +193,7 @@ class TestInMemoryWallet:
     @pytest.mark.asyncio
     async def test_set_public_did(self, wallet):
         info = await wallet.create_local_did(
-            self.test_seed, self.test_did, self.test_metadata
+            self.test_seed, self.test_did, None, self.test_metadata
         )
         assert not info.metadata.get("public")
 

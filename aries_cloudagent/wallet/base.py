@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from ..ledger.base import BaseLedger
 from ..ledger.endpoint_type import EndpointType
@@ -88,7 +88,11 @@ class BaseWallet(ABC):
 
     @abstractmethod
     async def create_local_did(
-        self, seed: str = None, did: str = None, metadata: dict = None
+        self,
+        seed: str = None,
+        did: str = None,
+        method_name: str = None,
+        metadata: dict = None,
     ) -> DIDInfo:
         """
         Create and store a new local DID.
@@ -96,6 +100,7 @@ class BaseWallet(ABC):
         Args:
             seed: Optional seed to use for DID
             did: The DID to use
+            method_name: The DID method to use
             metadata: Metadata to store with DID
 
         Returns:
@@ -104,7 +109,11 @@ class BaseWallet(ABC):
         """
 
     async def create_public_did(
-        self, seed: str = None, did: str = None, metadata: dict = {}
+        self,
+        seed: str = None,
+        did: str = None,
+        method_name: str = None,
+        metadata: dict = {},
     ) -> DIDInfo:
         """
         Create and store a new public DID.
@@ -114,6 +123,7 @@ class BaseWallet(ABC):
         Args:
             seed: Optional seed to use for DID
             did: The DID to use
+            method_name: The DID method to use
             metadata: Metadata to store with DID
 
         Returns:
@@ -127,7 +137,7 @@ class BaseWallet(ABC):
             info_meta = info.metadata
             info_meta["public"] = False
             await self.replace_local_did_metadata(info.did, info_meta)
-        return await self.create_local_did(seed, did, metadata)
+        return await self.create_local_did(seed, did, method_name, metadata)
 
     async def get_public_did(self) -> DIDInfo:
         """
@@ -312,7 +322,7 @@ class BaseWallet(ABC):
         """
 
     @abstractmethod
-    async def unpack_message(self, enc_message: bytes) -> (str, str, str):
+    async def unpack_message(self, enc_message: bytes) -> Tuple[str, str, str]:
         """
         Unpack a message.
 

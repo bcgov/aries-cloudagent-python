@@ -111,9 +111,7 @@ class HttpTransport(BaseInboundTransport):
                             status=200,
                             headers={
                                 "Content-Type": DIDCOMM_V1_MIME_TYPE
-                                if session.profile.settings.get(
-                                    "emit_new_didcomm_mime_type"
-                                )
+                                if session.profile.settings.get("aip_version", 1) >= 2
                                 else DIDCOMM_V0_MIME_TYPE
                             },
                         )

@@ -165,7 +165,7 @@ class TestIndySdkWallet(test_in_memory_wallet.TestInMemoryWallet):
     @pytest.mark.asyncio
     async def test_replace_local_did_metadata_x(self, wallet):
         info = await wallet.create_local_did(
-            self.test_seed, self.test_did, self.test_metadata
+            self.test_seed, self.test_did, None, self.test_metadata
         )
         assert info.did == self.test_did
         assert info.verkey == self.test_verkey

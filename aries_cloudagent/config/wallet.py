@@ -2,6 +2,8 @@
 
 import logging
 
+from typing import Tuple
+
 from ..core.error import ProfileNotFoundError
 from ..core.profile import Profile, ProfileManager
 from ..wallet.base import BaseWallet, DIDInfo
@@ -17,7 +19,7 @@ CFG_MAP = {"key", "rekey", "name", "storage_config", "storage_creds", "storage_t
 
 async def wallet_config(
     context: InjectionContext, provision: bool = False
-) -> (Profile, DIDInfo):
+) -> Tuple[Profile, DIDInfo]:
     """Initialize the root profile."""
 
     mgr = context.inject(ProfileManager)

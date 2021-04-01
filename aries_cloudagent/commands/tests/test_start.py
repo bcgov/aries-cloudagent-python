@@ -9,7 +9,7 @@ from .. import start as test_module
 
 class TestStart(AsyncTestCase):
     def test_bad_args(self):
-        with self.assertRaises(ArgsParseError):
+        with self.assertRaises(SystemExit):
             test_module.execute([])
 
         with self.assertRaises(SystemExit):

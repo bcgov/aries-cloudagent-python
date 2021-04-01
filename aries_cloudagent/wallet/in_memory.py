@@ -1,7 +1,7 @@
 """In-memory implementation of BaseWallet interface."""
 
 import asyncio
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from ..core.in_memory import InMemoryProfile
 
@@ -152,7 +152,11 @@ class InMemoryWallet(BaseWallet):
         return DIDInfo(did, verkey_enc, self.profile.local_dids[did]["metadata"].copy())
 
     async def create_local_did(
-        self, seed: str = None, did: str = None, metadata: dict = None
+        self,
+        seed: str = None,
+        did: str = None,
+        method_name: str = None,
+        metadata: dict = None,
     ) -> DIDInfo:
         """
         Create and store a new local DID.
@@ -160,6 +164,7 @@ class InMemoryWallet(BaseWallet):
         Args:
             seed: Optional seed to use for DID
             did: The DID to use
+            method_name: The DID method to use
             metadata: Metadata to store with DID
 
         Returns:
@@ -174,6 +179,8 @@ class InMemoryWallet(BaseWallet):
         verkey_enc = bytes_to_b58(verkey)
         if not did:
             did = bytes_to_b58(verkey[:16])
+        if method_name:
+            did = f"did:{method_name}{did}"
         if (
             did in self.profile.local_dids
             and self.profile.local_dids[did]["verkey"] != verkey_enc
@@ -371,7 +378,7 @@ class InMemoryWallet(BaseWallet):
         )
         return result
 
-    async def unpack_message(self, enc_message: bytes) -> (str, str, str):
+    async def unpack_message(self, enc_message: bytes) -> Tuple[str, str, str]:
         """
         Unpack a message.
 

@@ -68,7 +68,7 @@ class HttpTransport(BaseOutboundTransport):
         if api_key is not None:
             headers["x-api-key"] = api_key
         if isinstance(payload, bytes):
-            if profile.settings.get("emit_new_didcomm_mime_type"):
+            if profile.settings.get("aip_version", 1) >= 2:
                 headers["Content-Type"] = DIDCOMM_V1_MIME_TYPE
             else:
                 headers["Content-Type"] = DIDCOMM_V0_MIME_TYPE

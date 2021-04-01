@@ -99,7 +99,9 @@ class MediationManager:
         """
         wallet = session.inject(BaseWallet)
         storage = session.inject(BaseStorage)
-        info = await wallet.create_local_did(metadata={"type": "routing_did"})
+        info = await wallet.create_local_did(
+            method_name="peer", metadata={"type": "routing_did"}
+        )
         record = StorageRecord(
             type=self.ROUTING_DID_RECORD_TYPE,
             value=json.dumps({"verkey": info.verkey, "metadata": info.metadata}),

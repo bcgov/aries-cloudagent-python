@@ -28,6 +28,8 @@ from .messages.request import DIDXRequest
 from .messages.response import DIDXResponse
 from .messages.problem_report import ProblemReportReason
 
+LOGGER = logging.getLogger(__name__)
+
 
 class DIDXManagerError(BaseError):
     """Connection error."""
@@ -44,7 +46,6 @@ class DIDXManager(BaseConnectionManager):
             session: The profile session for this did exchange manager
         """
         self._session = session
-        self._logger = logging.getLogger(__name__)
         super().__init__(self._session)
 
     @property
@@ -148,7 +149,7 @@ class DIDXManager(BaseConnectionManager):
                 conn_rec.state = ConnRecord.State.REQUEST.rfc23
                 await conn_rec.save(self._session, reason="Sent connection request")
         else:
-            self._logger.debug("Connection invitation will await acceptance")
+            LOGGER.debug("Connection invitation will await acceptance")
 
         return conn_rec
 
@@ -234,7 +235,7 @@ class DIDXManager(BaseConnectionManager):
             my_info = await wallet.get_local_did(conn_rec.my_did)
         else:
             # Create new DID for connection
-            my_info = await wallet.create_local_did()
+            my_info = await wallet.create_local_did(method_name="peer")
             conn_rec.my_did = my_info.did
             keylist_updates = await mediation_mgr.add_key(
                 my_info.verkey, keylist_updates
@@ -261,7 +262,8 @@ class DIDXManager(BaseConnectionManager):
             ),
         )
         pthid = conn_rec.invitation_msg_id or f"did:sov:{conn_rec.their_public_did}"
-        attach = AttachDecorator.data_base64(did_doc.serialize())
+        LOGGER.error(did_doc.serialize(version=1))
+        attach = AttachDecorator.data_base64(did_doc.serialize(version=1))
         await attach.data.sign(my_info.verkey, wallet)
         if not my_label:
             my_label = self._session.settings.get("default_label")
@@ -362,7 +364,7 @@ class DIDXManager(BaseConnectionManager):
             connection_key = conn_rec.invitation_key
             if conn_rec.is_multiuse_invitation:
                 wallet = self._session.inject(BaseWallet)
-                my_info = await wallet.create_local_did()
+                my_info = await wallet.create_local_did(method_name="peer")
                 keylist_updates = await mediation_mgr.add_key(
                     my_info.verkey, keylist_updates
                 )
@@ -432,7 +434,7 @@ class DIDXManager(BaseConnectionManager):
             )
         else:
             # request is against implicit invitation on public DID
-            my_info = await wallet.create_local_did()
+            my_info = await wallet.create_local_did(method_name="peer")
 
             keylist_updates = await mediation_mgr.add_key(
                 my_info.verkey, keylist_updates
@@ -493,7 +495,7 @@ class DIDXManager(BaseConnectionManager):
                 conn_rec.state = ConnRecord.State.RESPONSE.rfc23
                 await conn_rec.save(self._session, reason="Sent connection response")
         else:
-            self._logger.debug("DID exchange request will await acceptance")
+            LOGGER.debug("DID exchange request will await acceptance")
 
         return conn_rec
 
@@ -543,7 +545,7 @@ class DIDXManager(BaseConnectionManager):
         if conn_rec.my_did:
             my_info = await wallet.get_local_did(conn_rec.my_did)
         else:
-            my_info = await wallet.create_local_did()
+            my_info = await wallet.create_local_did(method_name="peer")
             conn_rec.my_did = my_info.did
             keylist_updates = await mediation_mgr.add_key(
                 my_info.verkey, keylist_updates
@@ -569,7 +571,7 @@ class DIDXManager(BaseConnectionManager):
                 filter(None, [base_mediation_record, mediation_record])
             ),
         )
-        attach = AttachDecorator.data_base64(did_doc.serialize())
+        attach = AttachDecorator.data_base64(did_doc.serialize(version=1))
         await attach.data.sign(conn_rec.invitation_key, wallet)
         response = DIDXResponse(did=my_info.did, did_doc_attach=attach)
         # Assign thread information

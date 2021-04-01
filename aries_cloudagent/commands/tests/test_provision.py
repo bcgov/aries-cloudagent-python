@@ -10,7 +10,7 @@ from .. import provision as test_module
 
 class TestProvision(AsyncTestCase):
     def test_bad_calls(self):
-        with self.assertRaises(ArgsParseError):
+        with self.assertRaises(SystemExit):
             test_module.execute([])
 
         with self.assertRaises(SystemExit):
