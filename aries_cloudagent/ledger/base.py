@@ -228,7 +228,7 @@ class BaseLedger(ABC, metaclass=ABCMeta):
     @abstractmethod
     async def get_revoc_reg_delta(
         self, revoc_reg_id: str, timestamp_from=0, timestamp_to=None
-    ) -> (dict, int):
+    ) -> Tuple[dict, int]:
         """Look up a revocation registry delta by ID."""
 
     @abstractmethod
@@ -242,7 +242,9 @@ class BaseLedger(ABC, metaclass=ABCMeta):
         """
 
     @abstractmethod
-    async def get_revoc_reg_entry(self, revoc_reg_id: str, timestamp: int):
+    async def get_revoc_reg_entry(
+        self, revoc_reg_id: str, timestamp: int
+    ) -> Tuple[dict, int]:
         """Get revocation registry entry by revocation registry ID and timestamp."""
 
 

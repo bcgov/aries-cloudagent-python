@@ -13,7 +13,7 @@ from hashlib import sha256
 from io import StringIO
 from pathlib import Path
 from time import time
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Union
 
 from indy_vdr import ledger, open_pool, Pool, Request, VdrError
 
@@ -296,7 +296,7 @@ class IndyVdrLedger(BaseLedger):
 
     async def _submit(
         self,
-        request: [str, Request],
+        request: Union[str, Request],
         sign: bool = None,
         taa_accept: bool = None,
         sign_did: DIDInfo = sentinel,
@@ -357,6 +357,8 @@ class IndyVdrLedger(BaseLedger):
         schema_name: str,
         schema_version: str,
         attribute_names: Sequence[str],
+        write_ledger: bool = True,
+        endorser_did: str = None,
     ) -> Tuple[str, dict]:
         """
         Send schema to ledger.
@@ -575,6 +577,8 @@ class IndyVdrLedger(BaseLedger):
         signature_type: str = None,
         tag: str = None,
         support_revocation: bool = False,
+        write_ledger: bool = True,
+        endorser_did: str = None,
     ) -> Tuple[str, dict, bool]:
         """
         Send credential definition to ledger and store relevant key matter in wallet.
@@ -590,6 +594,9 @@ class IndyVdrLedger(BaseLedger):
             Tuple with cred def id, cred def structure, and whether it's novel
 
         """
+
+        # FIXME - implement write_ledger, endorser_did
+
         public_info = await self.get_wallet_public_did()
         if not public_info:
             raise BadLedgerRequestError(
@@ -1126,7 +1133,7 @@ class IndyVdrLedger(BaseLedger):
 
     async def get_revoc_reg_entry(
         self, revoc_reg_id: str, timestamp: int
-    ) -> (dict, int):
+    ) -> Tuple[dict, int]:
         """Get revocation registry entry by revocation registry ID and timestamp."""
         public_info = await self.get_wallet_public_did()
         try:
@@ -1149,7 +1156,7 @@ class IndyVdrLedger(BaseLedger):
 
     async def get_revoc_reg_delta(
         self, revoc_reg_id: str, timestamp_from=0, timestamp_to=None
-    ) -> (dict, int):
+    ) -> Tuple[dict, int]:
         """
         Look up a revocation registry delta by ID.
 
@@ -1248,3 +1255,22 @@ class IndyVdrLedger(BaseLedger):
         async with self.profile.session() as session:
             wallet = session.inject(BaseWallet)
             return await wallet.get_public_did()
+
+    async def txn_endorse(
+        self,
+        request_json: str,
+    ) -> str:
+        """Endorse (sign) the provided transaction."""
+        raise NotImplementedError()
+
+    async def txn_submit(
+        self,
+        request_json: str,
+        sign: bool,
+        taa_accept: bool,
+        sign_did: DIDInfo = sentinel,
+    ) -> str:
+        """Write the provided (signed and possibly endorsed) transaction to the ledger."""
+        return await self._submit(
+            request_json, sign=sign, taa_accept=taa_accept, sign_did=sign_did
+        )
