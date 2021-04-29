@@ -1,27 +1,38 @@
 """Aries-Askar implementation of BaseWallet interface."""
 
+import asyncio
+from collections import OrderedDict
 import json
 import logging
 
-from typing import Sequence
+from typing import Optional, List, Sequence, Tuple, Union
 
 from aries_askar import (
-    derive_verkey,
-    verify_signature,
+    crypto_box,
+    crypto_box_open,
+    crypto_box_random_nonce,
+    crypto_box_seal,
+    crypto_box_seal_open,
+    AskarError,
+    AskarErrorCode,
+    Key,
     KeyAlg,
     Session,
-    StoreError,
-    StoreErrorCode,
 )
+from aries_askar.bindings import key_get_secret_bytes
+from marshmallow import ValidationError
 
 from ..askar.profile import AskarProfileSession
 from ..ledger.base import BaseLedger
 from ..ledger.endpoint_type import EndpointType
 from ..ledger.error import LedgerConfigError
+from ..utils.jwe import b64url, JweEnvelope, JweRecipient
 
 from .base import BaseWallet, KeyInfo, DIDInfo
-from .crypto import validate_seed
+from .crypto import extract_pack_recipients, validate_seed
+from .did_method import DIDMethod
 from .error import WalletError, WalletDuplicateError, WalletNotFoundError
+from .key_type import KeyType
 from .util import b58_to_bytes, bytes_to_b58
 
 CATEGORY_DID = "did"
@@ -29,11 +40,13 @@ CATEGORY_DID = "did"
 LOGGER = logging.getLogger(__name__)
 
 
-# it would be nice for aca-py to handle qualified verkeys in general
-def normalize_verkey(verkey: str):
-    """Strip key algorithm suffix from verkey."""
-
-    return verkey.replace(":ed25519", "")
+def create_keypair(seed: Union[str, bytes] = None) -> Key:
+    if seed:
+        # create a key from a seed
+        seed = validate_seed(seed)
+        return Key.from_secret_bytes(KeyAlg.ED25519, seed)
+    else:
+        return Key.generate(KeyAlg.ED25519)
 
 
 class AskarWallet(BaseWallet):
@@ -54,12 +67,12 @@ class AskarWallet(BaseWallet):
         return self._session
 
     async def create_signing_key(
-        self, seed: str = None, metadata: dict = None
+        self, key_type: KeyType, seed: str = None, metadata: dict = None
     ) -> KeyInfo:
-        """
-        Create a new public/private signing keypair.
+        """Create a new public/private signing keypair.
 
         Args:
+            key_type: Key type to create
             seed: Seed for key
             metadata: Optional metadata to store with the keypair
 
@@ -75,19 +88,19 @@ class AskarWallet(BaseWallet):
         if metadata is None:
             metadata = {}
         try:
-            verkey = await self._session.handle.create_keypair(
-                KeyAlg.ED25519,
-                metadata=json.dumps(metadata),
-                seed=validate_seed(seed),
+            keypair = create_keypair(seed)
+            verkey = bytes_to_b58(keypair.get_public_bytes())
+            await self._session.handle.insert_key(
+                verkey, keypair, metadata=json.dumps(metadata)
             )
-        except StoreError as err:
-            if err.code == StoreErrorCode.DUPLICATE:
+        except AskarError as err:
+            if err.code == AskarErrorCode.DUPLICATE:
                 raise WalletDuplicateError(
                     "Verification key already present in wallet"
                 ) from None
             raise WalletError("Error creating signing key") from err
 
-        return KeyInfo(normalize_verkey(verkey), metadata)
+        return KeyInfo(verkey=verkey, metadata=metadata, key_type=key_type)
 
     async def get_signing_key(self, verkey: str) -> KeyInfo:
         """
@@ -107,11 +120,12 @@ class AskarWallet(BaseWallet):
 
         if not verkey:
             raise WalletNotFoundError("No key identifier provided")
-        key = await self._session.handle.fetch_keypair(verkey)
+        key = await self._session.handle.fetch_key(verkey)
         if not key:
             raise WalletNotFoundError("Unknown key: {}".format(verkey))
-        meta = json.loads(key.params.get("meta") or "{}")
-        return KeyInfo(verkey, meta)
+        metadata = json.loads(key.metadata or "{}")
+        # FIXME implement key types
+        return KeyInfo(verkey=verkey, metadata=metadata, key_type=KeyType.ED25519)
 
     async def replace_signing_key_metadata(self, verkey: str, metadata: dict):
         """
@@ -126,25 +140,32 @@ class AskarWallet(BaseWallet):
 
         """
 
-        # FIXME uses should always create a transaction first
+        # FIXME caller should always create a transaction first
 
         if not verkey:
             raise WalletNotFoundError("No key identifier provided")
 
-        key = await self._session.handle.fetch_keypair(verkey, for_update=True)
+        key = await self._session.handle.fetch_key(verkey, for_update=True)
         if not key:
             raise WalletNotFoundError("Keypair not found")
-        await self._session.handle.update_keypair(
+        await self._session.handle.update_key(
             verkey, metadata=json.dumps(metadata or {}), tags=key.tags
         )
 
     async def create_local_did(
-        self, seed: str = None, did: str = None, metadata: dict = None
+        self,
+        method: DIDMethod,
+        key_type: KeyType,
+        seed: str = None,
+        did: str = None,
+        metadata: dict = None,
     ) -> DIDInfo:
         """
         Create and store a new local DID.
 
         Args:
+            method: The method to use for the DID
+            key_type: The key type to use for the DID
             seed: Optional seed to use for DID
             did: The DID to use
             metadata: Metadata to store with DID
@@ -158,33 +179,41 @@ class AskarWallet(BaseWallet):
 
         """
 
+        # validate key_type
+        if not method.supports_key_type(key_type):
+            raise WalletError(
+                f"Invalid key type {key_type.key_type}"
+                f" for DID method {method.method_name}"
+            )
+
+        if method == DIDMethod.KEY and did:
+            raise WalletError("Not allowed to set DID for DID method 'key'")
+
         if not metadata:
             metadata = {}
+        if method not in [DIDMethod.SOV, DIDMethod.KEY]:
+            raise WalletError(
+                f"Unsupported DID method for askar storage: {method.method_name}"
+            )
 
         try:
-            if seed:
-                # create a key from a seed
-                seed = validate_seed(seed)
-                try:
-                    verkey = await self._session.handle.create_keypair(
-                        KeyAlg.ED25519, seed=seed
-                    )
-                except StoreError as err:
-                    if err.code == StoreErrorCode.DUPLICATE:
-                        verkey = await derive_verkey(KeyAlg.ED25519, seed)
-                    else:
-                        raise WalletError(
-                            "Error when creating keypair for local DID"
-                        ) from err
-            else:
-                # create a new random key
-                verkey = await self._session.handle.create_keypair(KeyAlg.ED25519)
+            keypair = create_keypair(seed)
+            verkey_bytes = keypair.get_public_bytes()
+            verkey = bytes_to_b58(verkey_bytes)
 
-            verkey = normalize_verkey(verkey)
+            try:
+                await self._session.handle.insert_key(
+                    verkey, keypair, metadata=json.dumps(metadata)
+                )
+            except AskarError as err:
+                if err.code == AskarErrorCode.DUPLICATE:
+                    # update metadata?
+                    pass
+                else:
+                    raise WalletError("Error inserting key") from err
 
             if not did:
-                key_b58 = verkey.split(":")[0]
-                did = bytes_to_b58(b58_to_bytes(key_b58)[:16])
+                did = bytes_to_b58(verkey_bytes[:16])
 
             item = await self._session.handle.fetch(CATEGORY_DID, did, for_update=True)
             if item:
@@ -204,10 +233,14 @@ class AskarWallet(BaseWallet):
                     tags={"verkey": verkey},
                 )
 
-        except StoreError as err:
+        except AskarError as err:
             raise WalletError("Error when creating local DID") from err
 
-        return DIDInfo(did, verkey, metadata)
+        return DIDInfo(
+            did=did, verkey=verkey, metadata=metadata, method=method, key_type=key_type
+        )
+
+    # FIXME implement get_public_did more efficiently (store lookup record)
 
     async def get_local_dids(self) -> Sequence[DIDInfo]:
         """
@@ -218,9 +251,6 @@ class AskarWallet(BaseWallet):
 
         """
 
-        # FIXME this is potentially slow and memory intensive. It would
-        # be better to store a separate record pointing to the public DID.
-
         ret = []
         for item in await self._session.handle.fetch_all(CATEGORY_DID):
             did_info = item.value_json
@@ -229,6 +259,9 @@ class AskarWallet(BaseWallet):
                     did=did_info["did"],
                     verkey=did_info["verkey"],
                     metadata=did_info.get("metadata"),
+                    # FIXME implement did method, key type
+                    method=DIDMethod.SOV,
+                    key_type=KeyType.ED25519,
                 )
             )
         return ret
@@ -253,7 +286,7 @@ class AskarWallet(BaseWallet):
             raise WalletNotFoundError("No identifier provided")
         try:
             did = await self._session.handle.fetch(CATEGORY_DID, did)
-        except StoreError as err:
+        except AskarError as err:
             raise WalletError("Error when fetching local DID") from err
         if not did:
             raise WalletNotFoundError("Unknown DID: {}".format(did))
@@ -262,6 +295,9 @@ class AskarWallet(BaseWallet):
             did=did_info["did"],
             verkey=did_info["verkey"],
             metadata=did_info.get("metadata") or {},
+            # FIXME implement did method, key type
+            method=DIDMethod.SOV,
+            key_type=KeyType.ED25519,
         )
 
     async def get_local_did_for_verkey(self, verkey: str) -> DIDInfo:
@@ -283,7 +319,7 @@ class AskarWallet(BaseWallet):
             dids = await self._session.handle.fetch_all(
                 CATEGORY_DID, {"verkey": verkey}, limit=1
             )
-        except StoreError as err:
+        except AskarError as err:
             raise WalletError("Error when fetching local DID for verkey") from err
         if dids:
             did_info = dids[0].value_json
@@ -291,6 +327,9 @@ class AskarWallet(BaseWallet):
                 did=did_info["did"],
                 verkey=did_info["verkey"],
                 metadata=did_info.get("metadata") or {},
+                # FIXME implement did method, key type
+                method=DIDMethod.SOV,
+                key_type=KeyType.ED25519,
             )
         raise WalletNotFoundError("No DID defined for verkey: {}".format(verkey))
 
@@ -314,7 +353,7 @@ class AskarWallet(BaseWallet):
                 await self._session.handle.replace(
                     CATEGORY_DID, did, value_json=entry_val, tags=item.tags
                 )
-        except StoreError as err:
+        except AskarError as err:
             raise WalletError("Error updating DID metadata") from err
 
     async def set_did_endpoint(
@@ -336,6 +375,8 @@ class AskarWallet(BaseWallet):
                 'endpoint' affects local wallet
         """
         did_info = await self.get_local_did(did)
+        if did_info.method != DIDMethod.SOV:
+            raise WalletError("Setting DID endpoint is only allowed for did:sov DIDs")
         metadata = {**did_info.metadata}
         if not endpoint_type:
             endpoint_type = EndpointType.ENDPOINT
@@ -369,16 +410,26 @@ class AskarWallet(BaseWallet):
             The new verification key
 
         """
+        # Check if DID can rotate keys
+        did_method = DIDMethod.from_did(did)
+        if not did_method.supports_rotation:
+            raise WalletError(
+                f"DID method '{did_method.method_name}' does not support key rotation."
+            )
+
+        # FIXME need handling of did method, key type
 
         # create a new key to be rotated to
-        seed = validate_seed(next_seed)
+        keypair = create_keypair(next_seed)
+        verkey = bytes_to_b58(keypair.get_public_bytes())
         try:
-            verkey = await self._session.handle.create_keypair(
-                KeyAlg.ED25519, seed=seed
+            await self._session.handle.insert_key(
+                verkey,
+                keypair,
             )
-        except StoreError as err:
-            if err.code == StoreErrorCode.DUPLICATE:
-                verkey = await derive_verkey(KeyAlg.ED25519, next_seed)
+        except AskarError as err:
+            if err.code == AskarErrorCode.DUPLICATE:
+                pass
             else:
                 raise WalletError(
                     "Error when creating new keypair for local DID"
@@ -395,10 +446,10 @@ class AskarWallet(BaseWallet):
             await self._session.handle.replace(
                 CATEGORY_DID, did, value_json=entry_val, tags=item.tags
             )
-        except StoreError as err:
+        except AskarError as err:
             raise WalletError("Error updating DID metadata") from err
 
-        return normalize_verkey(verkey)
+        return verkey
 
     async def rotate_did_keypair_apply(self, did: str) -> DIDInfo:
         """
@@ -426,16 +477,18 @@ class AskarWallet(BaseWallet):
             await self._session.handle.replace(
                 CATEGORY_DID, did, value_json=entry_val, tags=item.tags
             )
-        except StoreError as err:
+        except AskarError as err:
             raise WalletError("Error updating DID metadata") from err
 
-    async def sign_message(self, message: bytes, from_verkey: str) -> bytes:
+    async def sign_message(
+        self, message: Union[List[bytes], bytes], from_verkey: str
+    ) -> bytes:
         """
-        Sign a message using the private key associated with a given verkey.
+        Sign message(s) using the private key associated with a given verkey.
 
         Args:
-            message: Message bytes to sign
-            from_verkey: The verkey to use to sign
+            message: The message(s) to sign
+            from_verkey: Sign using the private key related to this verkey
 
         Returns:
             A signature
@@ -451,20 +504,28 @@ class AskarWallet(BaseWallet):
         if not from_verkey:
             raise WalletError("Verkey not provided")
         try:
-            return await self._session.handle.sign_message(from_verkey, message)
-        except StoreError as err:
+            keypair = await self._session.handle.fetch_key(from_verkey)
+            if not keypair:
+                raise WalletNotFoundError("Missing key for sign operation")
+            return keypair.key.sign_message(message)
+        except AskarError as err:
             raise WalletError("Exception when signing message") from err
 
     async def verify_message(
-        self, message: bytes, signature: bytes, from_verkey: str
+        self,
+        message: Union[List[bytes], bytes],
+        signature: bytes,
+        from_verkey: str,
+        key_type: KeyType,
     ) -> bool:
         """
         Verify a signature against the public key of the signer.
 
         Args:
-            message: Message to verify
-            signature: Signature to verify
+            message: The message to verify
+            signature: The signature to verify
             from_verkey: Verkey to use in verification
+            key_type: The key type to derive the signature verification algorithm from
 
         Returns:
             True if verified, else False
@@ -483,9 +544,11 @@ class AskarWallet(BaseWallet):
         if not message:
             raise WalletError("Message not provided")
 
+        verkey = b58_to_bytes(from_verkey)
         try:
-            return await verify_signature(from_verkey, message, signature)
-        except StoreError as err:
+            pk = Key.from_public_bytes(KeyAlg.ED25519, verkey)
+            return pk.verify_signature(message, signature)
+        except AskarError as err:
             raise WalletError("Exception when verifying message signature") from err
 
     async def pack_message(
@@ -510,13 +573,20 @@ class AskarWallet(BaseWallet):
         if message is None:
             raise WalletError("Message not provided")
         try:
-            return await self._session.handle.pack_message(
-                to_verkeys, from_verkey, message
+            if from_verkey:
+                from_key_entry = await self._session.handle.fetch_key(from_verkey)
+                if not from_key_entry:
+                    raise WalletNotFoundError("Missing key for pack operation")
+                from_key = from_key_entry.key
+            else:
+                from_key = None
+            return await asyncio.get_event_loop().run_in_executor(
+                None, pack_message, to_verkeys, from_key, message
             )
-        except StoreError as err:
+        except AskarError as err:
             raise WalletError("Exception when packing message") from err
 
-    async def unpack_message(self, enc_message: bytes) -> (str, str, str):
+    async def unpack_message(self, enc_message: bytes) -> Tuple[str, str, str]:
         """
         Unpack a message.
 
@@ -538,7 +608,119 @@ class AskarWallet(BaseWallet):
                 unpacked_json,
                 recipient,
                 sender,
-            ) = await self._session.handle.unpack_message(enc_message)
-        except StoreError as err:
+            ) = await unpack_message(self._session.handle, enc_message)
+        except AskarError as err:
             raise WalletError("Exception when unpacking message") from err
         return unpacked_json.decode("utf-8"), sender, recipient
+
+
+def pack_message(
+    to_verkeys: Sequence[str], from_key: Optional[Key], message: bytes
+) -> bytes:
+    wrapper = JweEnvelope()
+    cek = Key.generate(KeyAlg.C20P)
+    # avoid converting to bytes object: this way the only copy is zeroed afterward
+    cek_b = key_get_secret_bytes(cek._handle)
+    sender_vk = (
+        bytes_to_b58(from_key.get_public_bytes()).encode("utf-8") if from_key else None
+    )
+    sender_xk = from_key.convert_key(KeyAlg.X25519) if from_key else None
+
+    for target_vk in to_verkeys:
+        target_xk = Key.from_public_bytes(
+            KeyAlg.ED25519, b58_to_bytes(target_vk)
+        ).convert_key(KeyAlg.X25519)
+        if sender_vk:
+            enc_sender = crypto_box_seal(target_xk, sender_vk)
+            nonce = crypto_box_random_nonce()
+            enc_cek = crypto_box(target_xk, sender_xk, cek_b, nonce)
+            wrapper.add_recipient(
+                JweRecipient(
+                    encrypted_key=enc_cek,
+                    header=OrderedDict(
+                        [
+                            ("kid", target_vk),
+                            ("sender", b64url(enc_sender)),
+                            ("iv", b64url(nonce)),
+                        ]
+                    ),
+                )
+            )
+        else:
+            enc_sender = None
+            nonce = None
+            enc_cek = crypto_box_seal(target_xk, cek_b)
+            wrapper.add_recipient(
+                JweRecipient(encrypted_key=enc_cek, header={"kid": target_vk})
+            )
+    wrapper.set_protected(
+        OrderedDict(
+            [
+                ("enc", "xchacha20poly1305_ietf"),
+                ("typ", "JWM/1.0"),
+                ("alg", "Authcrypt" if from_key else "Anoncrypt"),
+            ]
+        ),
+        auto_flatten=False,
+    )
+    nonce = cek.aead_random_nonce()
+    ciphertext = cek.aead_encrypt(message, nonce, wrapper.protected_bytes)
+    tag = ciphertext[-16:]
+    ciphertext = ciphertext[:-16]
+    wrapper.set_payload(ciphertext, nonce, tag)
+    return wrapper.to_json().encode("utf-8")
+
+
+async def unpack_message(session: Session, enc_message: bytes) -> Tuple[str, str, str]:
+    try:
+        wrapper = JweEnvelope.from_json(enc_message)
+    except ValidationError:
+        raise WalletError("Invalid packed message")
+
+    alg = wrapper.protected.get("alg")
+    is_authcrypt = alg == "Authcrypt"
+    if not is_authcrypt and alg != "Anoncrypt":
+        raise WalletError("Unsupported pack algorithm: {}".format(alg))
+
+    recips = extract_pack_recipients(wrapper.recipients())
+
+    payload_key, sender_vk = None, None
+    for recip_vk in recips:
+        recip_key_entry = await session.fetch_key(recip_vk)
+        if recip_key_entry:
+            payload_key, sender_vk = extract_payload_key(
+                recips[recip_vk], recip_key_entry.key
+            )
+            break
+
+    if not payload_key:
+        raise WalletError(
+            "No corresponding recipient key found in {}".format(tuple(recips))
+        )
+    if not sender_vk and is_authcrypt:
+        raise WalletError("Sender public key not provided for Authcrypt message")
+
+    cek = Key.from_secret_bytes(KeyAlg.C20P, payload_key)
+    ciphertext = wrapper.ciphertext + wrapper.tag
+    message = cek.aead_decrypt(ciphertext, wrapper.iv, wrapper.protected_bytes)
+    return message, recip_vk, sender_vk
+
+
+def extract_payload_key(sender_cek: dict, recip_secret: Key) -> Tuple[bytes, str]:
+    """
+    Extract the payload key from pack recipient details.
+
+    Returns: A tuple of the CEK and sender verkey
+    """
+    recip_x = recip_secret.convert_key(KeyAlg.X25519)
+
+    if sender_cek["nonce"] and sender_cek["sender"]:
+        sender_vk = crypto_box_seal_open(recip_x, sender_cek["sender"]).decode("utf-8")
+        sender_x = Key.from_public_bytes(
+            KeyAlg.ED25519, b58_to_bytes(sender_vk)
+        ).convert_key(KeyAlg.X25519)
+        cek = crypto_box_open(recip_x, sender_x, sender_cek["key"], sender_cek["nonce"])
+    else:
+        sender_vk = None
+        cek = crypto_box_seal_open(recip_x, sender_cek["key"])
+    return cek, sender_vk

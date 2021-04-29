@@ -8,7 +8,7 @@ import uuid
 
 from typing import Sequence, Tuple, Union
 
-from aries_askar import StoreError, StoreErrorCode
+from aries_askar import AskarError, AskarErrorCode
 from indy_credx import (
     CredxError,
     Credential,
@@ -77,7 +77,7 @@ class IndyCredxHolder(IndyHolder):
                     record = await session.handle.fetch(
                         CATEGORY_MASTER_SECRET, IndyCredxHolder.MASTER_SECRET_ID
                     )
-                except StoreError as err:
+                except AskarError as err:
                     raise IndyHolderError("Error fetching master secret") from err
                 if record:
                     try:
@@ -96,8 +96,8 @@ class IndyCredxHolder(IndyHolder):
                             IndyCredxHolder.MASTER_SECRET_ID,
                             secret.to_json_buffer(),
                         )
-                    except StoreError as err:
-                        if err.code != StoreErrorCode.DUPLICATE:
+                    except AskarError as err:
+                        if err.code != AskarErrorCode.DUPLICATE:
                             raise IndyHolderError("Error saving master secret") from err
                         # else: lost race to create record, retry
                     else:
@@ -236,7 +236,7 @@ class IndyCredxHolder(IndyHolder):
                         value_json=mime_types,
                     )
                 await txn.commit()
-        except StoreError as err:
+        except AskarError as err:
             raise IndyHolderError("Error storing credential") from err
 
         return credential_id
@@ -346,7 +346,7 @@ class IndyCredxHolder(IndyHolder):
         try:
             async with self._profile.session() as session:
                 cred = await session.handle.fetch(CATEGORY_CREDENTIAL, credential_id)
-        except StoreError as err:
+        except AskarError as err:
             raise IndyHolderError("Error retrieving credential") from err
 
         if not cred:
@@ -386,8 +386,8 @@ class IndyCredxHolder(IndyHolder):
                 await session.handle.remove(
                     IndyHolder.RECORD_TYPE_MIME_TYPES, credential_id
                 )
-        except StoreError as err:
-            if err.code == StoreErrorCode.NOT_FOUND:
+        except AskarError as err:
+            if err.code == AskarErrorCode.NOT_FOUND:
                 pass
             else:
                 raise IndyHolderError("Error deleting credential") from err
@@ -412,7 +412,7 @@ class IndyCredxHolder(IndyHolder):
                     IndyHolder.RECORD_TYPE_MIME_TYPES,
                     credential_id,
                 )
-        except StoreError as err:
+        except AskarError as err:
             raise IndyHolderError("Error retrieving credential mime types") from err
         values = mime_types_record and mime_types_record.value_json
         if values:

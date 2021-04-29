@@ -9,7 +9,7 @@ import time
 from typing import Any, Mapping
 from weakref import ref
 
-from aries_askar import generate_raw_key, Session, Store, StoreError
+from aries_askar import generate_raw_key, AskarError, Session, Store
 
 from ..cache.base import BaseCache
 from ..config.injection_context import InjectionContext
@@ -174,7 +174,7 @@ class AskarProfileSession(ProfileSession):
         self._acquire_start = time.perf_counter()
         try:
             self._handle = await asyncio.wait_for(self._opener, 10)
-        except StoreError as err:
+        except AskarError as err:
             raise ProfileError("Error opening store session") from err
         self._acquire_end = time.perf_counter()
         self._opener = None
@@ -194,7 +194,7 @@ class AskarProfileSession(ProfileSession):
         if commit:
             try:
                 await self._handle.commit()
-            except StoreError as err:
+            except AskarError as err:
                 raise ProfileError("Error committing transaction") from err
         self._handle = None
         self._check_duration()
@@ -239,4 +239,4 @@ class AskarProfileManager(ProfileManager):
     @classmethod
     async def generate_store_key(self, seed: str = None) -> str:
         """Generate a raw store key."""
-        return await generate_raw_key(validate_seed(seed))
+        return generate_raw_key(validate_seed(seed))

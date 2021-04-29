@@ -5,7 +5,7 @@ import logging
 
 from typing import Sequence, Tuple
 
-from aries_askar import StoreError
+from aries_askar import AskarError
 
 from indy_credx import (
     Credential,
@@ -90,7 +90,7 @@ class IndyCredxIssuer(IndyIssuer):
                 await session.handle.insert(CATEGORY_SCHEMA, schema_id, schema_json)
         except CredxError as err:
             raise IndyIssuerError("Error creating schema") from err
-        except StoreError as err:
+        except AskarError as err:
             raise IndyIssuerError("Error storing schema") from err
         return (schema_id, schema_json)
 
@@ -110,7 +110,7 @@ class IndyCredxIssuer(IndyIssuer):
                         CATEGORY_CRED_DEF_KEY_PROOF, credential_definition_id
                     )
                 ) is not None
-        except StoreError as err:
+        except AskarError as err:
             raise IndyIssuerError("Error checking for credential definition") from err
 
     async def create_and_store_credential_definition(
@@ -172,7 +172,7 @@ class IndyCredxIssuer(IndyIssuer):
                     CATEGORY_CRED_DEF_KEY_PROOF, cred_def_id, key_proof.to_json_buffer()
                 )
                 await txn.commit()
-        except StoreError as err:
+        except AskarError as err:
             raise IndyIssuerError("Error storing credential definition") from err
         return (cred_def_id, cred_def_json)
 
@@ -195,7 +195,7 @@ class IndyCredxIssuer(IndyIssuer):
                 key_proof = await session.handle.fetch(
                     CATEGORY_CRED_DEF_KEY_PROOF, credential_definition_id
                 )
-        except StoreError as err:
+        except AskarError as err:
             raise IndyIssuerError("Error retrieving credential definition") from err
         if not cred_def or not key_proof:
             raise IndyIssuerError(
@@ -252,7 +252,7 @@ class IndyCredxIssuer(IndyIssuer):
                 cred_def_private = await session.handle.fetch(
                     CATEGORY_CRED_DEF_PRIVATE, credential_definition_id
                 )
-        except StoreError as err:
+        except AskarError as err:
             raise IndyIssuerError("Error retrieving credential definition") from err
         if not cred_def or not cred_def_private:
             raise IndyIssuerError(
@@ -319,7 +319,7 @@ class IndyCredxIssuer(IndyIssuer):
                     CATEGORY_REV_REG_INFO, revoc_reg_id, value_json=rev_info
                 )
                 await txn.commit()
-            except StoreError as err:
+            except AskarError as err:
                 raise IndyIssuerError(
                     "Error updating revocation registry index"
                 ) from err
@@ -360,7 +360,7 @@ class IndyCredxIssuer(IndyIssuer):
 
     async def revoke_credentials(
         self, revoc_reg_id: str, tails_file_path: str, cred_revoc_ids: Sequence[str]
-    ) -> (str, Sequence[str]):
+    ) -> Tuple[str, Sequence[str]]:
         """
         Revoke a set of credentials in a revocation registry.
 
@@ -389,13 +389,15 @@ class IndyCredxIssuer(IndyIssuer):
                 raise IndyIssuerError("Revocation registry not found")
             if not rev_reg_info:
                 raise IndyIssuerError("Revocation registry metadata not found")
-        except StoreError as err:
+        except AskarError as err:
             raise IndyIssuerError("Error retrieving revocation registry") from err
 
         try:
             rev_reg_def = RevocationRegistryDefinition.load(rev_reg_def.raw_value)
         except CredxError as err:
-            raise IndyIssuerError("Error loading revocation registry definition") from err
+            raise IndyIssuerError(
+                "Error loading revocation registry definition"
+            ) from err
 
         rev_crids = []
         failed_crids = []
@@ -454,7 +456,7 @@ class IndyCredxIssuer(IndyIssuer):
                     CATEGORY_REV_REG_INFO, revoc_reg_id, value_json=rev_info
                 )
                 await txn.commit()
-            except StoreError as err:
+            except AskarError as err:
                 raise IndyIssuerError("Error saving revocation registry") from err
         else:
             delta = None
@@ -518,7 +520,7 @@ class IndyCredxIssuer(IndyIssuer):
         try:
             async with self._profile.session() as session:
                 cred_def = await session.handle.fetch(CATEGORY_CRED_DEF, cred_def_id)
-        except StoreError as err:
+        except AskarError as err:
             raise IndyIssuerError("Error retrieving credential definition") from err
         if not cred_def:
             raise IndyIssuerError(
@@ -566,7 +568,7 @@ class IndyCredxIssuer(IndyIssuer):
                     rev_reg_def_private.to_json_buffer(),
                 )
                 await txn.commit()
-        except StoreError as err:
+        except AskarError as err:
             raise IndyIssuerError("Error saving new revocation registry") from err
 
         return (

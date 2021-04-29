@@ -261,11 +261,11 @@ class IndySdkWallet(BaseWallet):
             The new verification key
 
         """
-        # Check if did can rotate keys
+        # Check if DID can rotate keys
         did_method = DIDMethod.from_did(did)
         if not did_method.supports_rotation:
             raise WalletError(
-                f"Did method {did_method.method_name} does not support key rotation."
+                f"DID method '{did_method.method_name}' does not support key rotation."
             )
 
         try:
@@ -318,7 +318,7 @@ class IndySdkWallet(BaseWallet):
     ) -> DIDInfo:
         if method not in [DIDMethod.SOV, DIDMethod.KEY]:
             raise WalletError(
-                f"Unsupported did method for indy storage: {method.method_name}"
+                f"Unsupported DID method for indy storage: {method.method_name}"
             )
         if key_type != KeyType.ED25519:
             raise WalletError(
@@ -370,7 +370,7 @@ class IndySdkWallet(BaseWallet):
     ) -> DIDInfo:
         if method != DIDMethod.KEY:
             raise WalletError(
-                f"Unsupported did method for keypair storage: {method.method_name}"
+                f"Unsupported DID method for keypair storage: {method.method_name}"
             )
         if key_type != KeyType.BLS12381G2:
             raise WalletError(
@@ -433,11 +433,11 @@ class IndySdkWallet(BaseWallet):
         if not method.supports_key_type(key_type):
             raise WalletError(
                 f"Invalid key type {key_type.key_type}"
-                f" for did method {method.method_name}"
+                f" for DID method {method.method_name}"
             )
 
         if method == DIDMethod.KEY and did:
-            raise WalletError("Not allowed to set did for did method key")
+            raise WalletError("Not allowed to set DID for DID method 'key'")
 
         # All ed25519 keys are handled by indy
         if key_type == KeyType.ED25519:
@@ -481,11 +481,11 @@ class IndySdkWallet(BaseWallet):
     ) -> DIDInfo:
         if method not in [DIDMethod.SOV, DIDMethod.KEY]:
             raise WalletError(
-                f"Unsupported did method for indy storage: {method.method_name}"
+                f"Unsupported DID method for indy storage: {method.method_name}"
             )
         if key_type != KeyType.ED25519:
             raise WalletError(
-                f"Unsupported key type for indy storage: {key_type.key_type}"
+                f"Unsupported DID type for indy storage: {key_type.key_type}"
             )
 
         # key type is always ed25519, method not always key
@@ -511,11 +511,11 @@ class IndySdkWallet(BaseWallet):
     ):
         if method != DIDMethod.KEY:
             raise WalletError(
-                f"Unsupported did method for keypair storage: {method.method_name}"
+                f"Unsupported DID method for keypair storage: {method.method_name}"
             )
         if key_type != KeyType.BLS12381G2:
             raise WalletError(
-                f"Unsupported key type for keypair storage: {key_type.key_type}"
+                f"Unsupported DID type for keypair storage: {key_type.key_type}"
             )
 
         # method is always did:key
@@ -624,7 +624,7 @@ class IndySdkWallet(BaseWallet):
         """
         did_info = await self.get_local_did(did)
         if did_info.method != DIDMethod.SOV:
-            raise WalletError("Setting did endpoint is only allowed for did:sov dids")
+            raise WalletError("Setting DID endpoint is only allowed for did:sov DIDs")
 
         metadata = {**did_info.metadata}
         if not endpoint_type:

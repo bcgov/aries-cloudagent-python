@@ -2,7 +2,7 @@ import pytest
 
 from asynctest import mock as async_mock
 
-from aries_askar import StoreError, StoreErrorCode
+from aries_askar import AskarError, AskarErrorCode
 
 from ...askar.profile import AskarProfileManager
 from ...config.injection_context import InjectionContext
@@ -10,7 +10,9 @@ from ...core.in_memory import InMemoryProfile
 from ...ledger.endpoint_type import EndpointType
 
 from ..base import BaseWallet
+from ..did_method import DIDMethod
 from ..in_memory import InMemoryWallet
+from ..key_type import KeyType
 from .. import askar as test_module
 
 from . import test_in_memory_wallet
@@ -95,7 +97,10 @@ class TestAskarWallet(test_in_memory_wallet.TestInMemoryWallet):
                 test_module.ErrorCode.CommonIOError, {"message": "outlier"}
             )
             with pytest.raises(test_module.WalletError) as excinfo:
-                await wallet.create_local_did()
+                await wallet.create_local_did(
+                    DIDMethod.SOV,
+                    KeyType.ED25519,
+                )
             assert "outlier" in str(excinfo.value)
 
     @pytest.mark.asyncio
@@ -103,7 +108,10 @@ class TestAskarWallet(test_in_memory_wallet.TestInMemoryWallet):
         mock_ledger = async_mock.MagicMock(
             read_only=False, update_endpoint_for_did=async_mock.CoroutineMock()
         )
-        info_pub = await wallet.create_public_did()
+        info_pub = await wallet.create_public_did(
+            DIDMethod.SOV,
+            KeyType.ED25519,
+        )
         await wallet.set_did_endpoint(info_pub.did, "http://1.2.3.4:8021", mock_ledger)
         mock_ledger.update_endpoint_for_did.assert_called_once_with(
             info_pub.did, "http://1.2.3.4:8021", EndpointType.ENDPOINT
@@ -120,7 +128,10 @@ class TestAskarWallet(test_in_memory_wallet.TestInMemoryWallet):
         mock_ledger = async_mock.MagicMock(
             read_only=True, update_endpoint_for_did=async_mock.CoroutineMock()
         )
-        info_pub = await wallet.create_public_did()
+        info_pub = await wallet.create_public_did(
+            DIDMethod.SOV,
+            KeyType.ED25519,
+        )
         await wallet.set_did_endpoint(info_pub.did, "http://1.2.3.4:8021", mock_ledger)
         mock_ledger.update_endpoint_for_did.assert_not_called()
         info_pub2 = await wallet.get_public_did()
@@ -159,29 +170,33 @@ class TestAskarWallet(test_in_memory_wallet.TestInMemoryWallet):
     @pytest.mark.asyncio
     async def test_verify_message_x(self, wallet):
         with async_mock.patch.object(
-            test_module, "verify_signature", async_mock.CoroutineMock()
+            test_module.Key, "verify_signature"
         ) as mock_verify:
-            mock_verify.side_effect = test_module.StoreError(  # outlier
-                StoreErrorCode.BACKEND, {"message": "outlier"}
+            mock_verify.side_effect = test_module.AskarError(  # outlier
+                AskarErrorCode.BACKEND, {"message": "outlier"}
             )
             with pytest.raises(test_module.WalletError) as excinfo:
                 await wallet.verify_message(
-                    b"hello world", b"signature", self.test_verkey
+                    b"hello world",
+                    b"signature",
+                    self.test_ed25519_verkey,
+                    KeyType.ED25519,
                 )
 
     @pytest.mark.asyncio
     async def test_pack_message_x(self, wallet):
         with async_mock.patch.object(
-            test_module.Session, "pack_message", async_mock.CoroutineMock()
+            test_module,
+            "pack_message",
         ) as mock_pack:
-            mock_pack.side_effect = StoreError(  # outlier
-                StoreErrorCode.BACKEND, {"message": "outlier"}
+            mock_pack.side_effect = AskarError(  # outlier
+                AskarErrorCode.BACKEND, {"message": "outlier"}
             )
             with pytest.raises(test_module.WalletError) as excinfo:
                 await wallet.pack_message(
                     b"hello world",
                     [
-                        self.test_verkey,
+                        self.test_ed25519_verkey,
                     ],
                 )
 

@@ -134,7 +134,7 @@ class BaseWallet(ABC):
 
         """
         if method != DIDMethod.SOV:
-            raise WalletError("Creating public did is only allowed for did:sov dids")
+            raise WalletError("Creating public DID is only allowed for did:sov DIDs")
 
         # validate key_type
         if not method.supports_key_type(key_type):
@@ -179,7 +179,7 @@ class BaseWallet(ABC):
 
         did_info = await self.get_local_did(did)
         if did_info.method != DIDMethod.SOV:
-            raise WalletError("Setting public did is only allowed for did:sov dids")
+            raise WalletError("Setting public DID is only allowed for did:sov DIDs")
 
         # will raise an exception if not found
         info = None if did is None else await self.get_local_did(did)

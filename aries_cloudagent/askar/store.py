@@ -4,7 +4,7 @@ import json
 import logging
 import urllib
 
-from aries_askar import Store, StoreError, StoreErrorCode
+from aries_askar import AskarError, AskarErrorCode, Store
 
 from ..core.error import ProfileError, ProfileDuplicateError, ProfileNotFoundError
 from ..core.profile import Profile
@@ -119,8 +119,8 @@ class AskarStoreConfig:
         """
         try:
             await Store.remove(self.get_uri())
-        except StoreError as err:
-            if err.code == StoreErrorCode.NOT_FOUND:
+        except AskarError as err:
+            if err.code == AskarErrorCode.NOT_FOUND:
                 raise ProfileNotFoundError(
                     f"Store '{self.name}' not found",
                 )
@@ -150,12 +150,12 @@ class AskarStoreConfig:
                     self.key_derivation_method,
                     self.key,
                 )
-        except StoreError as err:
-            if err.code == StoreErrorCode.DUPLICATE:
+        except AskarError as err:
+            if err.code == AskarErrorCode.DUPLICATE:
                 raise ProfileDuplicateError(
                     f"Duplicate store '{self.name}'",
                 )
-            if err.code == StoreErrorCode.NOT_FOUND:
+            if err.code == AskarErrorCode.NOT_FOUND:
                 raise ProfileNotFoundError(
                     f"Store '{self.name}' not found",
                 )

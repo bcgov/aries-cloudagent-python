@@ -2,7 +2,7 @@
 
 from typing import Mapping, Sequence
 
-from aries_askar import Session, StoreError, StoreErrorCode
+from aries_askar import AskarError, AskarErrorCode, Session
 
 from ..askar.profile import AskarProfile, AskarProfileSession
 
@@ -52,8 +52,8 @@ class AskarStorage(BaseStorage):
             await self._session.handle.insert(
                 record.type, record.id, record.value, record.tags
             )
-        except StoreError as err:
-            if err.code == StoreErrorCode.DUPLICATE:
+        except AskarError as err:
+            if err.code == AskarErrorCode.DUPLICATE:
                 raise StorageDuplicateError(
                     f"Duplicate record: {record.type}/{record.id}"
                 ) from None
@@ -88,7 +88,7 @@ class AskarStorage(BaseStorage):
             options = {}
         try:
             item = await self._session.handle.fetch(record_type, record_id)
-        except StoreError as err:
+        except AskarError as err:
             raise StorageError("Error when fetching storage record") from err
         if not item:
             raise StorageNotFoundError(f"Record not found: {record_type}/{record_id}")
@@ -116,8 +116,8 @@ class AskarStorage(BaseStorage):
         validate_record(record)
         try:
             await self._session.handle.replace(record.type, record.id, value, tags)
-        except StoreError as err:
-            if err.code == StoreErrorCode.NOT_FOUND:
+        except AskarError as err:
+            if err.code == AskarErrorCode.NOT_FOUND:
                 raise StorageNotFoundError("Record not found") from None
             raise StorageError("Error when updating storage record value") from err
 
@@ -136,8 +136,8 @@ class AskarStorage(BaseStorage):
         validate_record(record, delete=True)
         try:
             await self._session.handle.remove(record.type, record.id)
-        except StoreError as err:
-            if err.code == StoreErrorCode.NOT_FOUND:
+        except AskarError as err:
+            if err.code == AskarErrorCode.NOT_FOUND:
                 raise StorageNotFoundError(
                     f"Record not found: {record.type}/{record.id}"
                 ) from None
@@ -159,7 +159,7 @@ class AskarStorage(BaseStorage):
             results = await self._session.handle.fetch_all(
                 type_filter, tag_query, limit=2
             )
-        except StoreError as err:
+        except AskarError as err:
             raise StorageError("Error when finding storage record") from err
         if len(results) > 1:
             raise StorageDuplicateError("Duplicate records found")
@@ -298,7 +298,7 @@ class AskarStorageSearchSession(BaseStorageSearchSession):
 
         try:
             row = await self._scan.__anext__()
-        except StoreError as err:
+        except AskarError as err:
             raise StorageSearchError("Error when fetching search results") from err
         except StopAsyncIteration:
             self._done = True
@@ -336,7 +336,7 @@ class AskarStorageSearchSession(BaseStorageSearchSession):
         while count < limit:
             try:
                 row = await self._scan.__anext__()
-            except StoreError as err:
+            except AskarError as err:
                 raise StorageSearchError("Error when fetching search results") from err
             except StopAsyncIteration:
                 break
@@ -363,7 +363,7 @@ class AskarStorageSearchSession(BaseStorageSearchSession):
             return
         try:
             self._scan = self._profile.store.scan(self.type_filter, self.tag_query)
-        except StoreError as err:
+        except AskarError as err:
             raise StorageSearchError("Error opening search query") from err
 
     async def close(self):
