@@ -284,7 +284,7 @@ class BaseWallet(ABC):
         did_info = await self.get_local_did(did)
 
         if did_info.method != DIDMethod.SOV:
-            raise WalletError("Setting did endpoint is only allowed for did:sov dids")
+            raise WalletError("Setting DID endpoint is only allowed for did:sov DIDs")
         metadata = {**did_info.metadata}
         if not endpoint_type:
             endpoint_type = EndpointType.ENDPOINT

@@ -225,14 +225,14 @@ class InMemoryWallet(BaseWallet):
         # are added it is probably better create a did method specific handler
         if method == DIDMethod.KEY:
             if did:
-                raise WalletError("Not allowed to set did for did method key")
+                raise WalletError("Not allowed to set DID for DID method 'key'")
 
             did = DIDKey.from_public_key(verkey, key_type).did
         elif method == DIDMethod.SOV:
             if not did:
                 did = bytes_to_b58(verkey[:16])
         else:
-            raise WalletError(f"Unsupported did method: {method.method_name}")
+            raise WalletError(f"Unsupported DID method: {method.method_name}")
 
         if (
             did in self.profile.local_dids
