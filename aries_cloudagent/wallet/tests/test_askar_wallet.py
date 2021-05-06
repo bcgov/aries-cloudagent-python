@@ -49,6 +49,10 @@ async def wallet():
 class TestAskarWallet(test_in_memory_wallet.TestInMemoryWallet):
     """Apply all InMemoryWallet tests against AskarWallet"""
 
+    # overriding derived values - Askar follows bls signatures draft 4 in key generation
+    test_key_bls12381g2_did = "did:key:zUC74E9UD2W6Q1MgPexCEdpstiCsY1Vbnyqepygk7McZVce38L1tGX7qZ2SgY4Zz2m9FUB4Xb5cEHSujks9XeKDzqe4QzW3CyyJ1cv8iBLNqU61EfkBoW2yEkg6VgqHTDtANYRS"
+    test_bls12381g2_verkey = "pPbb9Lqs3PVTyiHM4h8fbQqxHjBPm1Hixb6vdW9kkjHEij4FZrigkaV1P5DjWTbcKxeeYfkQuZMmozRQV3tH1gXhCA972LAXMGSKH7jxz8sNJqrCR6o8asgXDeYZeL1W3p8"
+
     @pytest.mark.skip
     @pytest.mark.asyncio
     async def test_rotate_did_keypair_x(self, wallet):

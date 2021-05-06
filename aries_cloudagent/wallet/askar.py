@@ -56,12 +56,11 @@ def create_keypair(key_type: KeyType, seed: Union[str, bytes] = None) -> Key:
     if seed:
         try:
             if key_type == KeyType.ED25519:
+                # not a seed - it is the secret key
                 seed = validate_seed(seed)
                 return Key.from_secret_bytes(alg, seed)
             else:
-                if isinstance(seed, str):
-                    seed = seed.encode("utf-8")
-                return Key.from_secret_bytes(alg, seed)
+                return Key.from_seed(alg, seed)
         except AskarError as err:
             if err.code == AskarErrorCode.INPUT:
                 raise WalletError("Invalid seed for key generation") from None
