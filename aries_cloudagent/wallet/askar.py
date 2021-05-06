@@ -31,7 +31,12 @@ from ..ledger.error import LedgerConfigError
 from ..utils.jwe import b64url, JweEnvelope, JweRecipient
 
 from .base import BaseWallet, KeyInfo, DIDInfo
-from .crypto import extract_pack_recipients, validate_seed
+from .crypto import (
+    extract_pack_recipients,
+    sign_message,
+    validate_seed,
+    verify_signed_message,
+)
 from .did_method import DIDMethod
 from .error import WalletError, WalletDuplicateError, WalletNotFoundError
 from .key_type import KeyType
@@ -521,7 +526,17 @@ class AskarWallet(BaseWallet):
             keypair = await self._session.handle.fetch_key(from_verkey)
             if not keypair:
                 raise WalletNotFoundError("Missing key for sign operation")
-            return keypair.key.sign_message(message)
+            key = keypair.key
+            if key.algorithm == KeyAlg.BLS12_381_G2:
+                # for now - must extract the key and use sign_message
+                return sign_message(
+                    message=message,
+                    secret=key.get_secret_bytes(),
+                    key_type=KeyType.BLS12381G2,
+                )
+
+            else:
+                return key.sign_message(message)
         except AskarError as err:
             raise WalletError("Exception when signing message") from err
 
@@ -559,11 +574,21 @@ class AskarWallet(BaseWallet):
             raise WalletError("Message not provided")
 
         verkey = b58_to_bytes(from_verkey)
-        try:
-            pk = Key.from_public_bytes(KeyAlg.ED25519, verkey)
-            return pk.verify_signature(message, signature)
-        except AskarError as err:
-            raise WalletError("Exception when verifying message signature") from err
+
+        if key_type == KeyType.ED25519:
+            try:
+                pk = Key.from_public_bytes(KeyAlg.ED25519, verkey)
+                return pk.verify_signature(message, signature)
+            except AskarError as err:
+                raise WalletError("Exception when verifying message signature") from err
+
+        # other key types are currently verified outside of Askar
+        return verify_signed_message(
+            message=message,
+            signature=signature,
+            verkey=verkey,
+            key_type=key_type,
+        )
 
     async def pack_message(
         self, message: str, to_verkeys: Sequence[str], from_verkey: str = None

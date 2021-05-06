@@ -136,7 +136,7 @@ class InMemoryWallet(BaseWallet):
         did_method = DIDMethod.from_did(did)
         if not did_method.supports_rotation:
             raise WalletError(
-                f"Did method {did_method.method_name} does not support key rotation."
+                f"DID method '{did_method.method_name}' does not support key rotation."
             )
 
         key_info = await self.create_signing_key(

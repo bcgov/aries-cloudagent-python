@@ -56,7 +56,9 @@ class TestAskarWallet(test_in_memory_wallet.TestInMemoryWallet):
     @pytest.mark.skip
     @pytest.mark.asyncio
     async def test_rotate_did_keypair_x(self, wallet):
-        info = await wallet.create_local_did(self.test_seed, self.test_did)
+        info = await wallet.create_local_did(
+            DIDMethod.SOV, KeyType.ED25519, self.test_seed, self.test_did
+        )
 
         with async_mock.patch.object(
             indy.did, "replace_keys_start", async_mock.CoroutineMock()
@@ -219,12 +221,14 @@ class TestWalletCompat:
         """
         Ensure that python-based pack/unpack is compatible with indy-sdk implementation
         """
-        await in_memory_wallet.create_local_did(self.test_seed)
+        await in_memory_wallet.create_local_did(
+            DIDMethod.SOV, KeyType.ED25519, self.test_seed
+        )
         py_packed = await in_memory_wallet.pack_message(
             self.test_message, [self.test_verkey], self.test_verkey
         )
 
-        await wallet.create_local_did(self.test_seed)
+        await wallet.create_local_did(DIDMethod.SOV, KeyType.ED25519, self.test_seed)
         packed = await wallet.pack_message(
             self.test_message, [self.test_verkey], self.test_verkey
         )
