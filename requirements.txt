@@ -17,3 +17,7 @@ pyyaml~=5.4.0
 ConfigArgParse~=1.2.3
 pyjwt~=1.7.1
 pydid~=0.2.3
+jsonpath_ng==1.5.2
+pytz~=2021.1
+python-dateutil~=2.8.1
+unflatten~=0.1

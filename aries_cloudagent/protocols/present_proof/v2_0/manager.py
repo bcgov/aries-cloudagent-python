@@ -76,11 +76,16 @@ class V20PresManager:
             thread_id=pres_proposal_message._thread_id,
             initiator=V20PresExRecord.INITIATOR_SELF,
             role=V20PresExRecord.ROLE_PROVER,
-            state=V20PresExRecord.STATE_PROPOSAL_SENT,
-            pres_proposal=pres_proposal_message.serialize(),
             auto_present=auto_present,
             trace=(pres_proposal_message._trace is not None),
         )
+        for format in pres_proposal_message.formats:
+            await V20PresFormat.Format.get(format.format).handler(
+                self._profile
+            ).create_exchange_for_proposal(pres_ex_record, pres_proposal_message)
+        pres_ex_record.pres_proposal = pres_proposal_message.serialize()
+        pres_ex_record.state = V20PresExRecord.STATE_PROPOSAL_SENT
+
         async with self._profile.session() as session:
             await pres_ex_record.save(
                 session, reason="create v2.0 presentation proposal"
@@ -103,82 +108,22 @@ class V20PresManager:
             thread_id=message._thread_id,
             initiator=V20PresExRecord.INITIATOR_EXTERNAL,
             role=V20PresExRecord.ROLE_VERIFIER,
-            state=V20PresExRecord.STATE_PROPOSAL_RECEIVED,
-            pres_proposal=message.serialize(),
             trace=(message._trace is not None),
         )
+
+        for format in message.formats:
+            await V20PresFormat.Format.get(format.format).handler(
+                self._profile
+            ).receive_pres_proposal(pres_ex_record, message)
+        pres_ex_record.pres_proposal = message.serialize()
+        pres_ex_record.state = V20PresExRecord.STATE_PROPOSAL_RECEIVED
+
         async with self._profile.session() as session:
             await pres_ex_record.save(
                 session, reason="receive v2.0 presentation request"
             )
 
         return pres_ex_record
-
-    async def create_bound_request(
-        self,
-        pres_ex_record: V20PresExRecord,
-        name: str = None,
-        version: str = None,
-        nonce: str = None,
-        comment: str = None,
-    ):
-        """
-        Create a presentation request bound to a proposal.
-
-        Args:
-            pres_ex_record: Presentation exchange record for which
-                to create presentation request
-            name: name to use in presentation request (None for default)
-            version: version to use in presentation request (None for default)
-            nonce: nonce to use in presentation request (None to generate)
-            comment: Optional human-readable comment pertaining to request creation
-
-        Returns:
-            A tuple (updated presentation exchange record, presentation request message)
-
-        """
-        indy_proof_request = V20PresProposal.deserialize(
-            pres_ex_record.pres_proposal
-        ).attachment(
-            V20PresFormat.Format.INDY
-        )  # will change for DIF
-
-        indy_proof_request["name"] = name or "proof-request"
-        indy_proof_request["version"] = version or "1.0"
-        indy_proof_request["nonce"] = nonce or await generate_pr_nonce()
-
-        pres_request_message = V20PresRequest(
-            comment=comment,
-            will_confirm=True,
-            formats=[
-                V20PresFormat(
-                    attach_id="indy",
-                    format_=ATTACHMENT_FORMAT[PRES_20_REQUEST][
-                        V20PresFormat.Format.INDY.api
-                    ],
-                )
-            ],
-            request_presentations_attach=[
-                AttachDecorator.data_base64(
-                    mapping=indy_proof_request,
-                    ident="indy",
-                )
-            ],
-        )
-        pres_request_message._thread = {"thid": pres_ex_record.thread_id}
-        pres_request_message.assign_trace_decorator(
-            self._profile.settings, pres_ex_record.trace
-        )
-
-        pres_ex_record.thread_id = pres_request_message._thread_id
-        pres_ex_record.state = V20PresExRecord.STATE_REQUEST_SENT
-        pres_ex_record.pres_request = pres_request_message.serialize()
-        async with self._profile.session() as session:
-            await pres_ex_record.save(
-                session, reason="create (bound) v2.0 presentation request"
-            )
-
-        return pres_ex_record, pres_request_message
 
     async def create_exchange_for_request(
         self, connection_id: str, pres_request_message: V20PresRequest
@@ -200,16 +145,82 @@ class V20PresManager:
             thread_id=pres_request_message._thread_id,
             initiator=V20PresExRecord.INITIATOR_SELF,
             role=V20PresExRecord.ROLE_VERIFIER,
-            state=V20PresExRecord.STATE_REQUEST_SENT,
-            pres_request=pres_request_message.serialize(),
             trace=(pres_request_message._trace is not None),
         )
+
+        for format in pres_request_message.formats:
+            await V20PresFormat.Format.get(format.format).handler(
+                self._profile
+            ).create_exchange_for_request(pres_ex_record, pres_request_message)
+        pres_ex_record.pres_request = pres_request_message.serialize()
+        pres_ex_record.state = V20PresExRecord.STATE_REQUEST_SENT
+
         async with self._profile.session() as session:
             await pres_ex_record.save(
                 session, reason="create (free) v2.0 presentation request"
             )
 
         return pres_ex_record
+
+    async def create_bound_request(
+        self,
+        pres_ex_record: V20PresExRecord,
+        request_data: dict = None,
+        comment: str = None,
+    ):
+        """
+        Create a presentation request bound to a proposal.
+
+        Args:
+            pres_ex_record: Presentation exchange record for which
+                to create presentation request
+            fmt2filter: Mapping between format and filter
+            name: name to use in presentation request (None for default)
+            version: version to use in presentation request (None for default)
+            nonce: nonce to use in presentation request (None to generate)
+            comment: Optional human-readable comment pertaining to request creation
+
+        Returns:
+            A tuple (updated presentation exchange record, presentation request message)
+
+        """
+        proof_proposal = V20PresProposal.deserialize(pres_ex_record.pres_proposal)
+        input_formats = proof_proposal.formats
+        request_formats = []
+        for format in input_formats:
+            pres_exch_format = V20PresFormat.Format.get(format.format)
+
+            if pres_exch_format:
+                request_formats.append(
+                    await pres_exch_format.handler(self._profile).create_bound_request(
+                        pres_ex_record,
+                        request_data,
+                    )
+                )
+        if len(request_formats) == 0:
+            raise V20PresManagerError(
+                "Unable to create presentation request. No supported formats"
+            )
+        pres_request_message = V20PresRequest(
+            comment=comment,
+            will_confirm=True,
+            formats=[format for (format, _) in request_formats],
+            request_presentations_attach=[attach for (_, attach) in request_formats],
+        )
+        pres_request_message._thread = {"thid": pres_ex_record.thread_id}
+        pres_request_message.assign_trace_decorator(
+            self._profile.settings, pres_ex_record.trace
+        )
+
+        pres_ex_record.thread_id = pres_request_message._thread_id
+        pres_ex_record.state = V20PresExRecord.STATE_REQUEST_SENT
+        pres_ex_record.pres_request = pres_request_message.serialize()
+        async with self._profile.session() as session:
+            await pres_ex_record.save(
+                session, reason="create (bound) v2.0 presentation request"
+            )
+
+        return pres_ex_record, pres_request_message
 
     async def receive_pres_request(self, pres_ex_record: V20PresExRecord):
         """
@@ -233,10 +244,9 @@ class V20PresManager:
     async def create_pres(
         self,
         pres_ex_record: V20PresExRecord,
-        requested_credentials: dict,
-        comment: str = None,
+        request_data: dict,
         *,
-        format_: V20PresFormat.Format = None,
+        comment: str = None,
     ) -> Tuple[V20PresExRecord, V20Pres]:
         """
         Create a presentation.
@@ -273,177 +283,28 @@ class V20PresManager:
             A tuple (updated presentation exchange record, presentation message)
 
         """
-        assert format_ in (None, V20PresFormat.Format.INDY)  # until DIF support
+        proof_request = V20PresRequest.deserialize(pres_ex_record.pres_request)
+        input_formats = proof_request.formats
+        pres_formats = []
+        for format in input_formats:
+            pres_exch_format = V20PresFormat.Format.get(format.format)
 
-        # Get all credentials for this presentation
-        holder = self._profile.inject(IndyHolder)
-        credentials = {}
-
-        # extract credential ids and non_revoked
-        requested_referents = {}
-        proof_request = V20PresRequest.deserialize(
-            pres_ex_record.pres_request
-        ).attachment(format_)
-        non_revoc_intervals = indy_proof_req2non_revoc_intervals(proof_request)
-        attr_creds = requested_credentials.get("requested_attributes", {})
-        req_attrs = proof_request.get("requested_attributes", {})
-        for reft in attr_creds:
-            requested_referents[reft] = {"cred_id": attr_creds[reft]["cred_id"]}
-            if reft in req_attrs and reft in non_revoc_intervals:
-                requested_referents[reft]["non_revoked"] = non_revoc_intervals[reft]
-
-        pred_creds = requested_credentials.get("requested_predicates", {})
-        req_preds = proof_request.get("requested_predicates", {})
-        for reft in pred_creds:
-            requested_referents[reft] = {"cred_id": pred_creds[reft]["cred_id"]}
-            if reft in req_preds and reft in non_revoc_intervals:
-                requested_referents[reft]["non_revoked"] = non_revoc_intervals[reft]
-
-        # extract mapping of presentation referents to credential ids
-        for reft in requested_referents:
-            credential_id = requested_referents[reft]["cred_id"]
-            if credential_id not in credentials:
-                credentials[credential_id] = json.loads(
-                    await holder.get_credential(credential_id)
-                )
-
-        # remove any timestamps that cannot correspond to non-revoc intervals
-        for r in ("requested_attributes", "requested_predicates"):
-            for reft, req_item in requested_credentials.get(r, {}).items():
-                if not credentials[req_item["cred_id"]].get(
-                    "rev_reg_id"
-                ) and req_item.pop("timestamp", None):
-                    LOGGER.info(
-                        f"Removed superfluous timestamp from requested_credentials {r} "
-                        f"{reft} for non-revocable credential {req_item['cred_id']}"
-                    )
-
-        # Get all schemas, credential definitions, and revocation registries in use
-        ledger = self._profile.inject(BaseLedger)
-        schemas = {}
-        cred_defs = {}
-        revocation_registries = {}
-
-        async with ledger:
-            for credential in credentials.values():
-                schema_id = credential["schema_id"]
-                if schema_id not in schemas:
-                    schemas[schema_id] = await ledger.get_schema(schema_id)
-
-                cred_def_id = credential["cred_def_id"]
-                if cred_def_id not in cred_defs:
-                    cred_defs[cred_def_id] = await ledger.get_credential_definition(
-                        cred_def_id
-                    )
-
-                if credential.get("rev_reg_id"):
-                    revocation_registry_id = credential["rev_reg_id"]
-                    if revocation_registry_id not in revocation_registries:
-                        revocation_registries[
-                            revocation_registry_id
-                        ] = RevocationRegistry.from_definition(
-                            await ledger.get_revoc_reg_def(revocation_registry_id), True
-                        )
-
-        # Get delta with non-revocation interval defined in "non_revoked"
-        # of the presentation request or attributes
-        epoch_now = int(time.time())
-
-        revoc_reg_deltas = {}
-        async with ledger:
-            for precis in requested_referents.values():  # cred_id, non-revoc interval
-                credential_id = precis["cred_id"]
-                if not credentials[credential_id].get("rev_reg_id"):
-                    continue
-                if "timestamp" in precis:
-                    continue
-                rev_reg_id = credentials[credential_id]["rev_reg_id"]
-                reft_non_revoc_interval = precis.get("non_revoked")
-                if reft_non_revoc_interval:
-                    key = (
-                        f"{rev_reg_id}_"
-                        f"{reft_non_revoc_interval.get('from', 0)}_"
-                        f"{reft_non_revoc_interval.get('to', epoch_now)}"
-                    )
-                    if key not in revoc_reg_deltas:
-                        (delta, delta_timestamp) = await ledger.get_revoc_reg_delta(
-                            rev_reg_id,
-                            reft_non_revoc_interval.get("from", 0),
-                            reft_non_revoc_interval.get("to", epoch_now),
-                        )
-                        revoc_reg_deltas[key] = (
-                            rev_reg_id,
-                            credential_id,
-                            delta,
-                            delta_timestamp,
-                        )
-                    for stamp_me in requested_referents.values():
-                        # often one cred satisfies many requested attrs/preds
-                        if stamp_me["cred_id"] == credential_id:
-                            stamp_me["timestamp"] = revoc_reg_deltas[key][3]
-
-        # Get revocation states to prove non-revoked
-        revocation_states = {}
-        for (
-            rev_reg_id,
-            credential_id,
-            delta,
-            delta_timestamp,
-        ) in revoc_reg_deltas.values():
-            if rev_reg_id not in revocation_states:
-                revocation_states[rev_reg_id] = {}
-
-            rev_reg = revocation_registries[rev_reg_id]
-            tails_local_path = await rev_reg.get_or_fetch_local_tails_path()
-
-            try:
-                revocation_states[rev_reg_id][delta_timestamp] = json.loads(
-                    await holder.create_revocation_state(
-                        credentials[credential_id]["cred_rev_id"],
-                        rev_reg.reg_def,
-                        delta,
-                        delta_timestamp,
-                        tails_local_path,
+            if pres_exch_format:
+                pres_formats.append(
+                    await pres_exch_format.handler(self._profile).create_pres(
+                        pres_ex_record,
+                        request_data,
                     )
                 )
-            except IndyHolderError as e:
-                LOGGER.error(
-                    f"Failed to create revocation state: {e.error_code}, {e.message}"
-                )
-                raise e
-
-        for (referent, precis) in requested_referents.items():
-            if "timestamp" not in precis:
-                continue
-            if referent in requested_credentials["requested_attributes"]:
-                requested_credentials["requested_attributes"][referent][
-                    "timestamp"
-                ] = precis["timestamp"]
-            if referent in requested_credentials["requested_predicates"]:
-                requested_credentials["requested_predicates"][referent][
-                    "timestamp"
-                ] = precis["timestamp"]
-
-        indy_proof_json = await holder.create_presentation(
-            proof_request,
-            requested_credentials,
-            schemas,
-            cred_defs,
-            revocation_states,
-        )
-        indy_proof = json.loads(indy_proof_json)
+        if len(pres_formats) == 0:
+            raise V20PresManagerError(
+                "Unable to create presentation. No supported formats"
+            )
 
         pres_message = V20Pres(
             comment=comment,
-            formats=[
-                V20PresFormat(
-                    attach_id="indy",
-                    format_=ATTACHMENT_FORMAT[PRES_20][V20PresFormat.Format.INDY.api],
-                )
-            ],
-            presentations_attach=[
-                AttachDecorator.data_base64(mapping=indy_proof, ident="indy")
-            ],
+            formats=[format for (format, _) in pres_formats],
+            presentations_attach=[attach for (_, attach) in pres_formats],
         )
 
         pres_message._thread = {"thid": pres_ex_record.thread_id}
@@ -454,18 +315,8 @@ class V20PresManager:
         # save presentation exchange state
         pres_ex_record.state = V20PresExRecord.STATE_PRESENTATION_SENT
         pres_ex_record.pres = V20Pres(
-            formats=[
-                V20PresFormat(
-                    attach_id="indy",
-                    format_=ATTACHMENT_FORMAT[PRES_20][V20PresFormat.Format.INDY.api],
-                ),
-            ],
-            presentations_attach=[
-                AttachDecorator.data_base64(
-                    mapping=indy_proof,
-                    ident="indy",
-                )
-            ],
+            formats=[format for (format, _) in pres_formats],
+            presentations_attach=[attach for (_, attach) in pres_formats],
         ).serialize()
         async with self._profile.session() as session:
             await pres_ex_record.save(session, reason="create v2.0 presentation")
@@ -480,130 +331,6 @@ class V20PresManager:
             presentation exchange record, retrieved and updated
 
         """
-
-        def _check_proof_vs_proposal():
-            """Check for bait and switch in presented values vs. proposal request."""
-            proof_req = V20PresRequest.deserialize(
-                pres_ex_record.pres_request
-            ).attachment(
-                V20PresFormat.Format.INDY
-            )  # will change for DIF
-
-            # revealed attrs
-            for reft, attr_spec in proof["requested_proof"]["revealed_attrs"].items():
-                proof_req_attr_spec = proof_req["requested_attributes"].get(reft)
-                if not proof_req_attr_spec:
-                    raise V20PresManagerError(
-                        f"Presentation referent {reft} not in proposal request"
-                    )
-                req_restrictions = proof_req_attr_spec.get("restrictions", {})
-
-                name = proof_req_attr_spec["name"]
-                proof_value = attr_spec["raw"]
-                sub_proof_index = attr_spec["sub_proof_index"]
-                schema_id = proof["identifiers"][sub_proof_index]["schema_id"]
-                cred_def_id = proof["identifiers"][sub_proof_index]["cred_def_id"]
-                criteria = {
-                    "schema_id": schema_id,
-                    "schema_issuer_did": schema_id.split(":")[-4],
-                    "schema_name": schema_id.split(":")[-2],
-                    "schema_version": schema_id.split(":")[-1],
-                    "cred_def_id": cred_def_id,
-                    "issuer_did": cred_def_id.split(":")[-5],
-                    f"attr::{name}::value": proof_value,
-                }
-
-                if not any(r.items() <= criteria.items() for r in req_restrictions):
-                    raise V20PresManagerError(
-                        f"Presented attribute {reft} does not satisfy proof request "
-                        f"restrictions {req_restrictions}"
-                    )
-
-            # revealed attr groups
-            for reft, attr_spec in (
-                proof["requested_proof"].get("revealed_attr_groups", {}).items()
-            ):
-                proof_req_attr_spec = proof_req["requested_attributes"].get(reft)
-                if not proof_req_attr_spec:
-                    raise V20PresManagerError(
-                        f"Presentation referent {reft} not in proposal request"
-                    )
-                req_restrictions = proof_req_attr_spec.get("restrictions", {})
-                proof_values = {
-                    name: values["raw"] for name, values in attr_spec["values"].items()
-                }
-                sub_proof_index = attr_spec["sub_proof_index"]
-                schema_id = proof["identifiers"][sub_proof_index]["schema_id"]
-                cred_def_id = proof["identifiers"][sub_proof_index]["cred_def_id"]
-                criteria = {
-                    "schema_id": schema_id,
-                    "schema_issuer_did": schema_id.split(":")[-4],
-                    "schema_name": schema_id.split(":")[-2],
-                    "schema_version": schema_id.split(":")[-1],
-                    "cred_def_id": cred_def_id,
-                    "issuer_did": cred_def_id.split(":")[-5],
-                    **{
-                        f"attr::{name}::value": value
-                        for name, value in proof_values.items()
-                    },
-                }
-
-                if not any(r.items() <= criteria.items() for r in req_restrictions):
-                    raise V20PresManagerError(
-                        f"Presented attr group {reft} does not satisfy proof request "
-                        f"restrictions {req_restrictions}"
-                    )
-
-            # predicate bounds
-            for reft, pred_spec in proof["requested_proof"]["predicates"].items():
-                proof_req_pred_spec = proof_req["requested_predicates"].get(reft)
-                if not proof_req_pred_spec:
-                    raise V20PresManagerError(
-                        f"Presentation referent {reft} not in proposal request"
-                    )
-                req_name = proof_req_pred_spec["name"]
-                req_pred = Predicate.get(proof_req_pred_spec["p_type"])
-                req_value = proof_req_pred_spec["p_value"]
-                req_restrictions = proof_req_pred_spec.get("restrictions", {})
-                sub_proof_index = pred_spec["sub_proof_index"]
-                for ge_proof in proof["proof"]["proofs"][sub_proof_index][
-                    "primary_proof"
-                ]["ge_proofs"]:
-                    proof_pred_spec = ge_proof["predicate"]
-                    if proof_pred_spec["attr_name"] != canon(req_name):
-                        continue
-                    if not (
-                        Predicate.get(proof_pred_spec["p_type"]) is req_pred
-                        and proof_pred_spec["value"] == req_value
-                    ):
-                        raise V20PresManagerError(
-                            f"Presentation predicate on {req_name} "
-                            "mismatches proposal request"
-                        )
-                    break
-                else:
-                    raise V20PresManagerError(
-                        f"Proposed request predicate on {req_name} not in presentation"
-                    )
-
-                schema_id = proof["identifiers"][sub_proof_index]["schema_id"]
-                cred_def_id = proof["identifiers"][sub_proof_index]["cred_def_id"]
-                criteria = {
-                    "schema_id": schema_id,
-                    "schema_issuer_did": schema_id.split(":")[-4],
-                    "schema_name": schema_id.split(":")[-2],
-                    "schema_version": schema_id.split(":")[-1],
-                    "cred_def_id": cred_def_id,
-                    "issuer_did": cred_def_id.split(":")[-5],
-                }
-
-                if not any(r.items() <= criteria.items() for r in req_restrictions):
-                    raise V20PresManagerError(
-                        f"Presented predicate {reft} does not satisfy proof request "
-                        f"restrictions {req_restrictions}"
-                    )
-
-        proof = message.attachment(V20PresFormat.Format.INDY)
 
         thread_id = message._thread_id
         conn_id_filter = (
@@ -622,8 +349,16 @@ class V20PresManager:
                     session, {"thread_id": thread_id}, None
                 )
 
-        _check_proof_vs_proposal()
+        input_formats = message.formats
+        pres_formats = []
+        for format in input_formats:
+            pres_format = V20PresFormat.Format.get(format.format)
 
+            if pres_format:
+                await pres_format.handler(self._profile).receive_pres(
+                    message,
+                    pres_ex_record,
+                )
         pres_ex_record.pres = message.serialize()
         pres_ex_record.state = V20PresExRecord.STATE_PRESENTATION_RECEIVED
 
@@ -645,73 +380,17 @@ class V20PresManager:
 
         """
         pres_request_msg = V20PresRequest.deserialize(pres_ex_record.pres_request)
-        indy_proof_request = pres_request_msg.attachment(V20PresFormat.Format.INDY)
-        indy_proof = V20Pres.deserialize(pres_ex_record.pres).attachment(
-            V20PresFormat.Format.INDY
-        )  # will change for DIF
+        input_formats = pres_request_msg.formats
+        for format in input_formats:
+            pres_exch_format = V20PresFormat.Format.get(format.format)
 
-        schema_ids = []
-        cred_def_ids = []
+            if pres_exch_format:
+                pres_ex_record = await pres_exch_format.handler(
+                    self._profile
+                ).verify_pres(
+                    pres_ex_record,
+                )
 
-        schemas = {}
-        cred_defs = {}
-        rev_reg_defs = {}
-        rev_reg_entries = {}
-
-        identifiers = indy_proof["identifiers"]
-        ledger = self._profile.inject(BaseLedger)
-        async with ledger:
-            for identifier in identifiers:
-                schema_ids.append(identifier["schema_id"])
-                cred_def_ids.append(identifier["cred_def_id"])
-
-                # Build schemas for anoncreds
-                if identifier["schema_id"] not in schemas:
-                    schemas[identifier["schema_id"]] = await ledger.get_schema(
-                        identifier["schema_id"]
-                    )
-
-                if identifier["cred_def_id"] not in cred_defs:
-                    cred_defs[
-                        identifier["cred_def_id"]
-                    ] = await ledger.get_credential_definition(
-                        identifier["cred_def_id"]
-                    )
-
-                if identifier.get("rev_reg_id"):
-                    if identifier["rev_reg_id"] not in rev_reg_defs:
-                        rev_reg_defs[
-                            identifier["rev_reg_id"]
-                        ] = await ledger.get_revoc_reg_def(identifier["rev_reg_id"])
-
-                    if identifier.get("timestamp"):
-                        rev_reg_entries.setdefault(identifier["rev_reg_id"], {})
-
-                        if (
-                            identifier["timestamp"]
-                            not in rev_reg_entries[identifier["rev_reg_id"]]
-                        ):
-                            (
-                                found_rev_reg_entry,
-                                _found_timestamp,
-                            ) = await ledger.get_revoc_reg_entry(
-                                identifier["rev_reg_id"], identifier["timestamp"]
-                            )
-                            rev_reg_entries[identifier["rev_reg_id"]][
-                                identifier["timestamp"]
-                            ] = found_rev_reg_entry
-
-        verifier = self._profile.inject(IndyVerifier)
-        pres_ex_record.verified = json.dumps(  # tag: needs string value
-            await verifier.verify_presentation(
-                indy_proof_request,
-                indy_proof,
-                schemas,
-                cred_defs,
-                rev_reg_defs,
-                rev_reg_entries,
-            )
-        )
         pres_ex_record.state = V20PresExRecord.STATE_DONE
 
         async with self._profile.session() as session:

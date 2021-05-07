@@ -30,6 +30,7 @@ from ....messaging.valid import (
     UUID4,
 )
 from ....storage.error import StorageError, StorageNotFoundError
+from ....storage.vc_holder.base import VCHolder
 from ....utils.tracing import trace_event, get_timer, AdminAPIMessageTracingSchema
 from ....wallet.error import WalletNotFoundError
 
@@ -38,6 +39,12 @@ from ...problem_report.v1_0 import internal_error
 from ..indy.cred_precis import IndyCredPrecisSchema
 from ..indy.proof import IndyPresSpecSchema
 from ..indy.proof_request import IndyProofRequestSchema
+from ..dif.pres_exch import (
+    InputDescriptorsSchema,
+)
+from ..dif.pres_request_schema import DIFPresRequestSchema
+from ..dif.pres_proposal_schema import DIFPresProposalSchema
+from ..dif.pres_schema import DIFPresSpecSchema
 
 from .manager import V20PresManager
 from .message_types import (
@@ -50,6 +57,7 @@ from .messages.pres_format import V20PresFormat
 from .messages.pres_proposal import V20PresProposal
 from .messages.pres_request import V20PresRequest
 from .models.pres_exchange import V20PresExRecord, V20PresExRecordSchema
+from .formats.handler import V20PresFormatError
 
 
 class V20PresentProofModuleResponseSchema(OpenAPISchema):
@@ -99,33 +107,6 @@ class V20PresExRecordListSchema(OpenAPISchema):
     results = fields.List(
         fields.Nested(V20PresExRecordSchema()),
         description="Presentation exchange records",
-    )
-
-
-class DIFPresProposalSchema(OpenAPISchema):
-    """DIF presentation proposal schema placeholder."""
-
-    some_dif = fields.Str(
-        description="Placeholder for W3C/DIF/JSON-LD presentation proposal format",
-        required=False,
-    )
-
-
-class DIFPresRequestSchema(OpenAPISchema):
-    """DIF presentation request schema placeholder."""
-
-    some_dif = fields.Str(
-        description="Placeholder for W3C/DIF/JSON-LD presentation request format",
-        required=False,
-    )
-
-
-class DIFPresSpecSchema(OpenAPISchema):
-    """DIF presentation schema specification placeholder."""
-
-    some_dif = fields.Str(
-        description="Placeholder for W3C/DIF/JSON-LD presentation format",
-        required=False,
     )
 
 
@@ -457,23 +438,66 @@ async def present_proof_credentials_list(request: web.BaseRequest):
     count = int(count) if isinstance(count, str) else 10
 
     holder = context.profile.inject(IndyHolder)
+    indy_credentials = {}
+    # INDY
     try:
-        # TODO: allow for choice of format from those specified in pres req
-        pres_request = pres_ex_record.by_format["pres_request"].get(
+        indy_pres_request = pres_ex_record.by_format["pres_request"].get(
             V20PresFormat.Format.INDY.api
         )
-        credentials = await holder.get_credentials_for_presentation_request_by_referent(
-            pres_request,
-            pres_referents,
-            start,
-            count,
-            extra_query,
+        indy_credentials = (
+            await holder.get_credentials_for_presentation_request_by_referent(
+                indy_pres_request,
+                pres_referents,
+                start,
+                count,
+                extra_query,
+            )
         )
     except IndyHolderError as err:
         return await internal_error(
             err, web.HTTPBadRequest, pres_ex_record, outbound_handler
         )
 
+    holder = context.profile.inject(VCHolder)
+    dif_credentials = {}
+    # DIF
+    try:
+        dif_pres_request = pres_ex_record.by_format["pres_request"].get(
+            V20PresFormat.Format.DIF.api
+        )
+        input_descriptors = dif_pres_request.get("presentation_definitions").get(
+            "input_descriptors"
+        )
+        types = []
+        contexts = []
+        schema_ids = []
+        for input_descriptor in input_descriptors:
+            for schema in input_descriptor.schemas:
+                uri = schema.uri
+                required = schema.required or True
+                if required:
+                    if "#" in uri:
+                        contexts.append(uri.split("#")[0])
+                        types.append(uri.split("#")[1])
+                    else:
+                        schema_ids.append(uri)
+        if len(types) == 0:
+            types = None
+        if len(contexts) == 0:
+            contexts = None
+        if len(schema_ids) == 0:
+            schema_ids = None
+        search = holder.search_credentials(
+            contexts=contexts,
+            types=types,
+            schema_ids=schema_ids,
+        )
+        records = await search.fetch(count)
+    except StorageNotFoundError as err:
+        return await internal_error(
+            err, web.HTTPBadRequest, pres_ex_record, outbound_handler
+        )
+    credentials = {**indy_credentials, **dif_credentials}
     pres_ex_record.log_state(
         "Retrieved presentation credentials",
         {
@@ -847,33 +871,58 @@ async def present_proof_send_presentation(request: web.BaseRequest):
         raise web.HTTPForbidden(reason=f"Connection {connection_id} not ready")
 
     pres_manager = V20PresManager(context.profile)
-    try:
-        indy_spec = body.get(V20PresFormat.Format.INDY.api)  # TODO: accommodate DIF
-        pres_ex_record, pres_message = await pres_manager.create_pres(
-            pres_ex_record,
-            {
-                "self_attested_attributes": indy_spec["self_attested_attributes"],
-                "requested_attributes": indy_spec["requested_attributes"],
-                "requested_predicates": indy_spec["requested_predicates"],
-            },
-            comment=body.get("comment"),
-            format_=fmt,
-        )
-        result = pres_ex_record.serialize()
-    except (
-        BaseModelError,
-        IndyHolderError,
-        LedgerError,
-        StorageError,
-        WalletNotFoundError,
-    ) as err:
-        return await internal_error(
-            err,
-            web.HTTPBadRequest,
-            pres_ex_record or conn_record,
-            outbound_handler,
-        )
-
+    if fmt is V20PresFormat.Format.INDY.api:
+        try:
+            indy_spec = body.get(V20PresFormat.Format.INDY.api)
+            request_data = {
+                "requested_credentials": {
+                    "self_attested_attributes": indy_spec["self_attested_attributes"],
+                    "requested_attributes": indy_spec["requested_attributes"],
+                    "requested_predicates": indy_spec["requested_predicates"],
+                }
+            }
+            pres_ex_record, pres_message = await pres_manager.create_pres(
+                pres_ex_record,
+                request_data=request_data,
+                comment=body.get("comment"),
+            )
+            result = pres_ex_record.serialize()
+        except (
+            BaseModelError,
+            IndyHolderError,
+            LedgerError,
+            StorageError,
+            WalletNotFoundError,
+        ) as err:
+            return await internal_error(
+                err,
+                web.HTTPBadRequest,
+                pres_ex_record or conn_record,
+                outbound_handler,
+            )
+    elif fmt is V20PresFormat.Format.DIF.api:
+        try:
+            dif_spec = body.get(V20PresFormat.Format.DIF.api)
+            if "input_descriptors" in dif_spec:
+                request_data = {"input_descriptors": dif_spec.get("input_descriptors")}
+            pres_ex_record, pres_message = await pres_manager.create_pres(
+                pres_ex_record,
+                request_data=request_data,
+                comment=body.get("comment"),
+            )
+            result = pres_ex_record.serialize()
+        except (
+            BaseModelError,
+            LedgerError,
+            V20PresFormatError,
+            WalletNotFoundError,
+        ) as err:
+            return await internal_error(
+                err,
+                web.HTTPBadRequest,
+                pres_ex_record or conn_record,
+                outbound_handler,
+            )
     trace_msg = body.get("trace")
     pres_message.assign_trace_decorator(
         context.settings,

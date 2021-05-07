@@ -2,18 +2,22 @@
 
 from collections import namedtuple
 from enum import Enum
-from typing import Sequence, Union
+from typing import Mapping, Sequence, Type, Union
 from uuid import uuid4
 
 from marshmallow import EXCLUDE, fields
 
+from .....utils.classloader import DeferLoad
 from .....messaging.decorators.attach_decorator import AttachDecorator
 from .....messaging.models.base import BaseModel, BaseModelSchema
 from .....messaging.valid import UUIDFour
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from ..formats.handler import V20PresFormatHandler
 
 # aries prefix
-FormatSpec = namedtuple("FormatSpec", "aries")
+FormatSpec = namedtuple("FormatSpec", "aries handler")
 
 
 class V20PresFormat(BaseModel):
@@ -27,8 +31,20 @@ class V20PresFormat(BaseModel):
     class Format(Enum):
         """Attachment format."""
 
-        INDY = FormatSpec("hlindy/")
-        DIF = FormatSpec("dif/")
+        INDY = FormatSpec(
+            "hlindy/",
+            DeferLoad(
+                "aries_cloudagent.protocols.present_proof.v2_0"
+                ".formats.indy.handler.IndyPresExchangeHandler"
+            ),
+        )
+        DIF = FormatSpec(
+            "dif/",
+            DeferLoad(
+                "aries_cloudagent.protocols.present_proof.v2_0"
+                ".formats.dif.handler.DIFPresExchangeHandler"
+            ),
+        )
 
         @classmethod
         def get(cls, label: Union[str, "V20PresFormat.Format"]):
@@ -51,6 +67,15 @@ class V20PresFormat(BaseModel):
         def aries(self) -> str:
             """Accessor for aries identifier."""
             return self.value.aries
+
+        @property
+        def handler(self) -> Type["V20PresFormatHandler"]:
+            """Accessor for presentation exchange format handler."""
+            return self.value.handler.resolved
+
+        def validate_fields(self, message_type: str, attachment_data: Mapping):
+            """Raise ValidationError for invalid attachment formats."""
+            self.handler.validate_fields(message_type, attachment_data)
 
         def get_attachment_data(
             self,
