@@ -1,0 +1,33 @@
+version: "3"
+services:
+  diwala-admin-agent:
+    image: bcgovimages/aries-cloudagent:py36-1.16-0_0.6.0
+    ports:
+      - "${AGENT_PORT}:${AGENT_PORT}"
+      - "${ADMIN_PORT}:${ADMIN_PORT}"
+    entrypoint: /bin/bash
+    command: [
+        "-c",
+        "curl -d '{\"seed\":\"${INDY_SEED}\", \"role\":\"TRUST_ANCHOR\", \"alias\":\"${AGENT_LABEL}\"}' -X POST ${LEDGER_URL}/register; \
+        sleep 5; \
+        aca-py start \
+        -it http '0.0.0.0' ${AGENT_PORT} \
+        -ot http \
+        --admin '0.0.0.0' ${ADMIN_PORT} \
+        --admin-insecure-mode \
+        -e 'http://host.docker.internal:10000' \
+        --auto-provision \
+        --wallet-storage-type postgres_storage \
+        --wallet-storage-config '{\"url\":\"host.docker.internal:5432\", \"wallet_scheme\":\"MultiWalletSingleTableSharedPool\"}' \
+        --wallet-storage-creds '{\"account\":\"local-cloud-agent\",\"password\":\"testtest\",\"admin_account\":\"admin-cloud-agent\",\"admin_password\":\"testtest\"}' \
+        --wallet-type indy \
+        --wallet-name ${MAIN_WALLET_NAME} \
+        --wallet-key ${WALLETKEY} \
+        --seed ${INDY_SEED} \
+        --genesis-url ${LEDGER_URL}/genesis \
+        --label '${AGENT_LABEL}' \
+        --multitenant \
+        --multitenant-admin \
+        --jwt-secret very_secret_secret \
+        --log-level debug",
+      ]

@@ -1,0 +1,39 @@
+#!/bin/bash
+
+function generateKey(){
+  (
+    _length=${1:-48}
+    # Format can be `-base64` or `-hex`
+    _format=${2:--base64}
+
+    echo $(openssl rand ${_format} ${_length})
+  )
+}
+
+function generateSeed(){
+  (
+    _prefix=${1}
+    _seed=$(echo "${_prefix}$(generateKey 32)" | fold -w 32 | head -n 1 )
+    _seed=$(echo -n "${_seed}")
+    echo ${_seed}
+  )
+}
+
+toLower() {
+  echo $(echo ${@} | tr '[:upper:]' '[:lower:]')
+}
+
+SCRIPT_HOME="$(cd "$(dirname "$0")" && pwd)"
+
+pushd ${SCRIPT_HOME} >/dev/null
+COMMAND=$(toLower ${1})
+shift || COMMAND=usage
+
+case "${COMMAND}" in
+seed)
+  generateSeed seedPrefix
+  ;;
+*)
+  echo "Only function this has for now is seed"
+  ;;
+esac
