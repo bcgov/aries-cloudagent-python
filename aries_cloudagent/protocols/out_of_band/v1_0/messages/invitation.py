@@ -20,7 +20,7 @@ from .....messaging.decorators.attach_decorator import (
     AttachDecorator,
     AttachDecoratorSchema,
 )
-from .....messaging.valid import INDY_DID
+from .....messaging.valid import INDY_OR_GENERIC_DID
 from .....wallet.util import bytes_to_b64, b64_to_bytes
 
 from ....didcomm_prefix import DIDCommPrefix
@@ -208,7 +208,10 @@ class InvitationMessageSchema(AgentMessageSchema):
     )
 
     service_blocks = fields.Nested(ServiceSchema, many=True)
-    service_dids = fields.List(fields.Str(description="Service DID", **INDY_DID))
+    service_dids = fields.List(fields.Str(
+        description="Service DID",
+        **INDY_OR_GENERIC_DID
+    ))
 
     @validates_schema
     def validate_fields(self, data, **kwargs):

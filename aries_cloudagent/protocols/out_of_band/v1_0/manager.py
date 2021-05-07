@@ -405,7 +405,8 @@ class OutOfBandManager(BaseConnectionManager):
             endpoint, recipient_keys, routing_keys = await self.resolve_invitation(
                 service_did
             )
-            public_did = service_did.split(":")[-1]
+            # public_did = service_did.split(":")[-1]
+            public_did = service_did
             service = ServiceMessage.deserialize(
                 {
                     "id": "#inline",

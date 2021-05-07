@@ -19,7 +19,7 @@ from ....messaging.models.base import BaseModelError
 from ....messaging.models.openapi import OpenAPISchema
 from ....messaging.valid import (
     ENDPOINT,
-    INDY_DID,
+    GENERIC_DID,
     INDY_RAW_PUBLIC_KEY,
     UUIDFour,
 )
@@ -136,11 +136,11 @@ class ConnectionStaticRequestSchema(OpenAPISchema):
     """Request schema for a new static connection."""
 
     my_seed = fields.Str(description="Seed to use for the local DID", required=False)
-    my_did = fields.Str(description="Local DID", required=False, **INDY_DID)
+    my_did = fields.Str(description="Local DID", required=False, **GENERIC_DID)
     their_seed = fields.Str(
         description="Seed to use for the remote DID", required=False
     )
-    their_did = fields.Str(description="Remote DID", required=False, **INDY_DID)
+    their_did = fields.Str(description="Remote DID", required=False, **GENERIC_DID)
     their_verkey = fields.Str(description="Remote verification key", required=False)
     their_endpoint = fields.Str(
         description="URL endpoint for other party", required=False, **ENDPOINT
@@ -154,12 +154,12 @@ class ConnectionStaticRequestSchema(OpenAPISchema):
 class ConnectionStaticResultSchema(OpenAPISchema):
     """Result schema for new static connection."""
 
-    my_did = fields.Str(description="Local DID", required=True, **INDY_DID)
+    my_did = fields.Str(description="Local DID", required=True, **GENERIC_DID)
     mv_verkey = fields.Str(
         description="My verification key", required=True, **INDY_RAW_PUBLIC_KEY
     )
     my_endpoint = fields.Str(description="My URL endpoint", required=True, **ENDPOINT)
-    their_did = fields.Str(description="Remote DID", required=True, **INDY_DID)
+    their_did = fields.Str(description="Remote DID", required=True, **GENERIC_DID)
     their_verkey = fields.Str(
         description="Remote verification key", required=True, **INDY_RAW_PUBLIC_KEY
     )
@@ -177,7 +177,7 @@ class ConnectionsListQueryStringSchema(OpenAPISchema):
     invitation_key = fields.Str(
         description="invitation key", required=False, **INDY_RAW_PUBLIC_KEY
     )
-    my_did = fields.Str(description="My DID", required=False, **INDY_DID)
+    my_did = fields.Str(description="My DID", required=False, **GENERIC_DID)
     state = fields.Str(
         description="Connection state",
         required=False,
@@ -185,7 +185,7 @@ class ConnectionsListQueryStringSchema(OpenAPISchema):
             {label for state in ConnRecord.State for label in state.value}
         ),
     )
-    their_did = fields.Str(description="Their DID", required=False, **INDY_DID)
+    their_did = fields.Str(description="Their DID", required=False, **GENERIC_DID)
     their_role = fields.Str(
         description="Their role in the connection protocol",
         required=False,

@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 from marshmallow import EXCLUDE, fields, validates_schema, ValidationError
 
 from .....messaging.agent_message import AgentMessage, AgentMessageSchema
-from .....messaging.valid import INDY_DID, INDY_RAW_PUBLIC_KEY
+from .....messaging.valid import GENERIC_DID, INDY_RAW_PUBLIC_KEY
 from .....wallet.util import b64_to_bytes, bytes_to_b64
 
 from ..message_types import CONNECTION_INVITATION, PROTOCOL_PACKAGE
@@ -106,7 +106,7 @@ class ConnectionInvitationSchema(AgentMessageSchema):
         example="Bob",
     )
     did = fields.Str(
-        required=False, description="DID for connection invitation", **INDY_DID
+        required=False, description="DID for connection invitation", **GENERIC_DID
     )
     recipient_keys = fields.List(
         fields.Str(description="Recipient public key", **INDY_RAW_PUBLIC_KEY),

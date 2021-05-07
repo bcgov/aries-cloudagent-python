@@ -22,6 +22,12 @@ async def setup(context: InjectionContext):
     await key_resolver.setup(context)
     registry.register(key_resolver)
 
+    web_resolver = ClassProvider(
+        "aries_cloudagent.resolver.default.web.WebDIDResolver"
+    ).provide(context.settings, context.injector)
+    await web_resolver.setup(context)
+    registry.register(web_resolver)
+
     if not context.settings.get("ledger.disabled"):
         indy_resolver = ClassProvider(
             "aries_cloudagent.resolver.default.indy.IndyDIDResolver"

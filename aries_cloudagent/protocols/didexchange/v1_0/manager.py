@@ -267,7 +267,14 @@ class DIDXManager(BaseConnectionManager):
                 filter(None, [base_mediation_record, mediation_record])
             ),
         )
-        pthid = conn_rec.invitation_msg_id or f"did:sov:{conn_rec.their_public_did}"
+        if (
+            conn_rec.their_public_did is not None and
+            conn_rec.their_public_did.startswith("did:")
+        ):
+            qualified_did = conn_rec.their_public_did
+        else:
+            qualified_did = f"did:sov:{conn_rec.their_public_did}"
+        pthid = conn_rec.invitation_msg_id or qualified_did
         attach = AttachDecorator.data_base64(did_doc.serialize())
         await attach.data.sign(my_info.verkey, wallet)
         if not my_label:
@@ -290,6 +297,12 @@ class DIDXManager(BaseConnectionManager):
             await responder.send(
                 keylist_updates, connection_id=mediation_record.connection_id
             )
+
+        # # Send request
+        # responder = self._session.inject(BaseResponder, required=False)
+        # if responder:
+        #     await responder.send(request, connection_id=conn_rec.connection_id)
+
         return request
 
     async def receive_request(
