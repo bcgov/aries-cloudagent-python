@@ -9,10 +9,10 @@ from asynctest import TestCase as AsyncTestCase
 from asynctest import mock as async_mock
 
 from .....messaging.util import canon
-from .....revocation.models.indy import NonRevocationInterval
+from .....protocols.didcomm_prefix import DIDCommPrefix
 
-from ....didcomm_prefix import DIDCommPrefix
 
+from ..non_rev_interval import IndyNonRevocationInterval
 from ..predicate import Predicate
 from ..pres_preview import (
     IndyPresAttrSpec,
@@ -433,7 +433,7 @@ class TestIndyPresPreviewAsync(AsyncTestCase):
             **{k: INDY_PROOF_REQ[k] for k in ("name", "version", "nonce")},
             ledger=mock_ledger,
             non_revoc_intervals={
-                CD_ID[s_id]: NonRevocationInterval(1234567890, EPOCH_NOW)
+                CD_ID[s_id]: IndyNonRevocationInterval(1234567890, EPOCH_NOW)
                 for s_id in S_ID
             },
         )

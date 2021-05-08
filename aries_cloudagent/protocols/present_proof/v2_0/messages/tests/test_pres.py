@@ -10,8 +10,6 @@ from ......messaging.util import str_to_datetime, str_to_epoch
 
 from .....didcomm_prefix import DIDCommPrefix
 
-from ....indy.pres_preview import PRESENTATION_PREVIEW
-
 from ...message_types import ATTACHMENT_FORMAT, PRES_20
 
 from ..pres_format import V20PresFormat

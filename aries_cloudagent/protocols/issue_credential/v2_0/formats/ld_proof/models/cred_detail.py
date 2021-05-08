@@ -1,15 +1,13 @@
 """Linked data proof verifiable options detail artifacts to attach to RFC 453 messages."""
 
-
 from typing import Optional, Union
-from marshmallow import fields, INCLUDE
 
+from marshmallow import fields, INCLUDE
 
 from .......vc.vc_ld import CredentialSchema
 from .......messaging.models.base import BaseModel, BaseModelSchema
-from .......vc.vc_ld.models.credential import (
-    VerifiableCredential,
-)
+from .......vc.vc_ld.models.credential import VerifiableCredential
+
 from .cred_detail_options import LDProofVCDetailOptionsSchema, LDProofVCDetailOptions
 
 

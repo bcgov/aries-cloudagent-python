@@ -53,5 +53,5 @@ class CMProblemReportSchema(ProblemReportSchema):
         ]:
             raise ValidationError(
                 "Value for description.code must be one of "
-                f"{[prr.reason for prr in ProblemReportReason]}"
+                f"{[prr.value for prr in ProblemReportReason]}"
             )

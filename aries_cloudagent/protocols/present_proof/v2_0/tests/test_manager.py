@@ -15,12 +15,11 @@ from .....messaging.decorators.attach_decorator import AttachDecorator
 from .....messaging.request_context import RequestContext
 from .....messaging.responder import BaseResponder, MockResponder
 from .....storage.error import StorageNotFoundError
-from .....indy.verifier import IndyVerifier
+from .....indy.sdk.models.xform import indy_proof_req_preview2indy_requested_creds
 from .....indy.sdk.verifier import IndySdkVerifier
+from .....indy.verifier import IndyVerifier
 
 from ....didcomm_prefix import DIDCommPrefix
-
-from ...indy.xform import indy_proof_req_preview2indy_requested_creds
 
 from .. import manager as test_module
 from ..manager import V20PresManager, V20PresManagerError
@@ -849,6 +848,7 @@ class TestV20PresManager(AsyncTestCase):
 
         # cover by_format property
         by_format = px_rec_dummy.by_format
+
         assert by_format.get("pres_proposal").get("indy") == INDY_PROOF_REQ_NAME
         assert by_format.get("pres_request").get("indy") == INDY_PROOF_REQ_NAME
 

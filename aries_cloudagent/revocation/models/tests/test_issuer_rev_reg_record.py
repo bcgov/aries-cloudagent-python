@@ -6,6 +6,7 @@ from asynctest import TestCase as AsyncTestCase, mock as async_mock
 
 from ....core.in_memory import InMemoryProfile
 from ....indy.issuer import IndyIssuer, IndyIssuerError
+from ....indy.sdk.models.revocation import IndyRevRegDef
 from ....indy.util import indy_client_dir
 from ....ledger.base import BaseLedger
 from ....tails.base import BaseTailsServer
@@ -20,6 +21,33 @@ from ..revocation_registry import RevocationRegistry
 TEST_DID = "55GkHamhTU1ZbTbV2ab9DE"
 CRED_DEF_ID = f"{TEST_DID}:3:CL:1234:default"
 REV_REG_ID = f"{TEST_DID}:4:{CRED_DEF_ID}:CL_ACCUM:0"
+TAILS_HASH = "3MLjUFQz9x9n5u9rFu8Ba9C5bo4HNFjkPNc54jZPSNaZ"
+TAILS_URI = "http://tails.ca/3MLj"
+
+REV_REG_DEF = {
+    "ver": "1.0",
+    "id": REV_REG_ID,
+    "revocDefType": "CL_ACCUM",
+    "tag": "default",
+    "credDefId": CRED_DEF_ID,
+    "value": {
+        "issuanceType": "ISSUANCE_ON_DEMAND",
+        "maxCredNum": 5,
+        "publicKeys": {
+            "accumKey": {
+                "z": "1 120F522F81E6B71556D4CAE43ED6DB3EEE154ABBD4443108E0F41A989682B6E9 1 20FA951E9B7714EAB189BD9AA2BE6F165D86327C01BEB39B2F13737EC8FEC7AC 1 209F1257F3A54ABE76140DDF6740E54BB132A682521359A32AF7B194E55E22E1 1 09F7A59005C49398548E2CF68F03E95F2724BB12432E51A351FC22208EC9B96B 1 1FAD806F8BAA3BD98B32DD9237399C35AB207E7D39C3F240789A3196394B3357 1 0C0DB1C207DAC540DA70556486BEC1671C0B8649CA0685810AFC2C0A2A29A2F1 1 08DF0DF68F7B662130DE9E756695E6DAD8EE7E7FE0CE140FB6E4C8669C51C431 1 1FB49B2822014FC18BDDC7E1FE42561897BEF809B1ED5FDCF4AD3B46975469A0 1 1EDA5FF53A25269912A7646FBE7E9110C443D695C96E70DC41441DB62CA35ADF 1 217FEA48FB4FBFC850A62C621C00F2CCF1E2DBBA118302A2B976E337B74F3F8F 1 0DD4DD3F9350D4026AF31B33213C9CCE27F1771C082676CCC0DB870C46343BC1 1 04C490B80545D203B743579054F8198D7515190649679D0AB8830DFFC3640D0A"
+            }
+        },
+        "tailsHash": TAILS_HASH,
+        "tailsLocation": TAILS_URI,
+    },
+}
+REV_REG_ENTRY = {
+    "ver": "1.0",
+    "value": {
+        "accum": "21 11792B036AED0AAA12A46CF39347EB35C865DAC99F767B286F6E37FF0FF4F1CBE 21 12571556D2A1B4475E81295FC8A4F0B66D00FB78EE8C7E15C29C2CA862D0217D4 6 92166D2C2A3BC621AD615136B7229AF051AB026704BF8874F9F0B0106122BF4F 4 2C47BCBBC32904161E2A2926F120AD8F40D94C09D1D97DA735191D27370A68F8 6 8CC19FDA63AB16BEA45050D72478115BC1CCB8E47A854339D2DD5E112976FFF7 4 298B2571FFC63A737B79C131AC7048A1BD474BF907AF13BC42E533C79FB502C7"
+    },
+}
 
 
 class TestIssuerRevRegRecord(AsyncTestCase):
@@ -69,15 +97,8 @@ class TestIssuerRevRegRecord(AsyncTestCase):
 
         issuer.create_and_store_revocation_registry.return_value = (
             REV_REG_ID,
-            json.dumps(
-                {
-                    "value": {
-                        "tailsHash": "59NY25UEV8a5CzNkXFQMppwofUxtYtf4FDp1h9xgeLcK",
-                        "tailsLocation": "point at infinity",
-                    }
-                }
-            ),
-            json.dumps({"revoc_reg_entry": "dummy-entry"}),
+            json.dumps(REV_REG_DEF),
+            json.dumps(REV_REG_ENTRY),
         )
 
         with async_mock.patch.object(
@@ -87,16 +108,16 @@ class TestIssuerRevRegRecord(AsyncTestCase):
 
         assert rec.revoc_reg_id == REV_REG_ID
         assert rec.state == IssuerRevRegRecord.STATE_GENERATED
-        assert rec.tails_hash == "59NY25UEV8a5CzNkXFQMppwofUxtYtf4FDp1h9xgeLcK"
+        assert rec.tails_hash == TAILS_HASH
         assert rec.tails_local_path == join(
             indy_client_dir(join("tails", REV_REG_ID)), rec.tails_hash
         )
         with self.assertRaises(RevocationError):
             await rec.set_tails_file_public_uri(self.profile, "dummy")
 
-        await rec.set_tails_file_public_uri(self.profile, "http://localhost/dummy")
-        assert rec.tails_public_uri == "http://localhost/dummy"
-        assert rec.revoc_reg_def["value"]["tailsLocation"] == "http://localhost/dummy"
+        await rec.set_tails_file_public_uri(self.profile, TAILS_URI)
+        assert rec.tails_public_uri == TAILS_URI
+        assert rec.revoc_reg_def["value"]["tailsLocation"] == TAILS_URI
 
         await rec.send_def(self.profile)
         assert rec.state == IssuerRevRegRecord.STATE_POSTED
@@ -133,12 +154,12 @@ class TestIssuerRevRegRecord(AsyncTestCase):
         rec_full = IssuerRevRegRecord(
             issuer_did=TEST_DID,
             revoc_reg_id=REV_REG_ID,
-            revoc_reg_def={"sample": "rr-def"},
+            revoc_reg_def=REV_REG_DEF,
             revoc_def_type="CL_ACCUM",
-            revoc_reg_entry={"sample": "rr-ent"},
+            revoc_reg_entry=REV_REG_ENTRY,
             cred_def_id=CRED_DEF_ID,
             state=IssuerRevRegRecord.STATE_FULL,
-            tails_public_uri="http://localhost/dummy/path",
+            tails_public_uri=TAILS_URI,
         )
 
         with self.assertRaises(RevocationError) as x_state:
@@ -189,15 +210,8 @@ class TestIssuerRevRegRecord(AsyncTestCase):
         issuer.create_and_store_revocation_registry = async_mock.CoroutineMock(
             return_value=(
                 REV_REG_ID,
-                json.dumps(
-                    {
-                        "value": {
-                            "tailsHash": "abcd1234",
-                            "tailsLocation": "/tmp/location",
-                        }
-                    }
-                ),
-                json.dumps({"revoc_reg_entry": "dummy-entry"}),
+                json.dumps(REV_REG_DEF),
+                json.dumps(REV_REG_ENTRY),
             )
         )
         self.profile.context.injector.bind_instance(IndyIssuer, issuer)
@@ -218,3 +232,24 @@ class TestIssuerRevRegRecord(AsyncTestCase):
 
         with self.assertRaises(RevocationError):
             await rec.send_entry(self.profile)
+
+    async def test_serde(self):
+        rr_def = IndyRevRegDef.deserialize(REV_REG_DEF)
+        for arg in [rr_def, rr_def.serialize()]:
+            irr_rec = IssuerRevRegRecord(
+                issuer_did=TEST_DID,
+                revoc_reg_id=REV_REG_ID,
+                revoc_reg_def=arg,
+                revoc_def_type="CL_ACCUM",
+                revoc_reg_entry=REV_REG_ENTRY,
+                cred_def_id=CRED_DEF_ID,
+                state=IssuerRevRegRecord.STATE_FULL,
+                tails_public_uri=TAILS_URI,
+            )
+
+            assert type(irr_rec.revoc_reg_def) == dict
+            assert type(irr_rec.revoc_reg_entry) == dict
+            ser = irr_rec.serialize()
+            deser = IssuerRevRegRecord.deserialize(ser)
+            assert type(deser.revoc_reg_def) == dict
+            assert type(deser.revoc_reg_entry) == dict

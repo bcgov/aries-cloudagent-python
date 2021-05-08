@@ -1,13 +1,13 @@
 from unittest import TestCase
 
-from .....didcomm_prefix import DIDCommPrefix
-
-from ....indy.pres_preview import (
+from ......indy.sdk.models.pres_preview import (
     IndyPresAttrSpec,
     IndyPresPredSpec,
     IndyPresPreview,
     PRESENTATION_PREVIEW,
 )
+
+from .....didcomm_prefix import DIDCommPrefix
 
 from ...message_types import PRESENTATION_PROPOSAL
 

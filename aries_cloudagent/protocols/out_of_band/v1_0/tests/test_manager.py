@@ -11,7 +11,13 @@ from .....connections.models.conn_record import ConnRecord
 from .....connections.models.connection_target import ConnectionTarget
 from .....connections.models.diddoc import DIDDoc, PublicKey, PublicKeyType, Service
 from .....core.in_memory import InMemoryProfile
+from .....did.did_key import DIDKey
 from .....indy.holder import IndyHolder
+from .....indy.sdk.models.pres_preview import (
+    IndyPresAttrSpec,
+    IndyPresPredSpec,
+    IndyPresPreview,
+)
 from .....messaging.decorators.attach_decorator import AttachDecorator
 from .....messaging.responder import BaseResponder, MockResponder
 from .....messaging.util import str_to_epoch
@@ -23,11 +29,6 @@ from .....protocols.coordinate_mediation.v1_0.manager import MediationManager
 from .....protocols.didexchange.v1_0.manager import DIDXManager
 from .....protocols.issue_credential.v1_0.message_types import (
     CREDENTIAL_OFFER,
-)
-from .....protocols.present_proof.indy.pres_preview import (
-    IndyPresAttrSpec,
-    IndyPresPredSpec,
-    IndyPresPreview,
 )
 from .....protocols.present_proof.v1_0.manager import PresentationManager
 from .....protocols.present_proof.v1_0.message_types import (
@@ -54,14 +55,12 @@ from .....protocols.present_proof.v2_0.messages.pres import V20Pres
 from .....protocols.present_proof.v2_0.messages.pres_format import V20PresFormat
 from .....protocols.present_proof.v2_0.messages.pres_request import V20PresRequest
 from .....storage.error import StorageNotFoundError
-from .....multitenant.manager import MultitenantManager
 from .....transport.inbound.receipt import MessageReceipt
 from .....wallet.base import BaseWallet
 from .....wallet.did_info import DIDInfo, KeyInfo
 from .....wallet.in_memory import InMemoryWallet
 from .....wallet.key_type import KeyType
 from .....wallet.did_method import DIDMethod
-from .....did.did_key import DIDKey
 
 from ....didcomm_prefix import DIDCommPrefix
 from ....issue_credential.v1_0.models.credential_exchange import V10CredentialExchange

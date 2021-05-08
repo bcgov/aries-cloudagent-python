@@ -12,6 +12,7 @@ from ....connections.util import mediation_record_if_id
 from ....core.error import BaseError
 from ....core.profile import ProfileSession
 from ....indy.holder import IndyHolder
+from ....indy.sdk.models.xform import indy_proof_req_preview2indy_requested_creds
 from ....messaging.responder import BaseResponder
 from ....messaging.decorators.attach_decorator import AttachDecorator
 from ....multitenant.manager import MultitenantManager
@@ -30,7 +31,6 @@ from ...didexchange.v1_0.manager import DIDXManager
 from ...issue_credential.v1_0.models.credential_exchange import V10CredentialExchange
 from ...issue_credential.v2_0.messages.cred_offer import V20CredOffer
 from ...issue_credential.v2_0.models.cred_ex_record import V20CredExRecord
-from ...present_proof.indy.xform import indy_proof_req_preview2indy_requested_creds
 from ...present_proof.v1_0.manager import PresentationManager
 from ...present_proof.v1_0.message_types import PRESENTATION_REQUEST
 from ...present_proof.v1_0.models.presentation_exchange import V10PresentationExchange

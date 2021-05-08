@@ -1,7 +1,8 @@
 """Credential offer message handler."""
 
-from .....messaging.base_handler import BaseHandler, BaseResponder, HandlerException
+from .....messaging.base_handler import BaseHandler, HandlerException
 from .....messaging.request_context import RequestContext
+from .....messaging.responder import BaseResponder
 
 from ..manager import CredentialManager
 from ..messages.credential_offer import CredentialOffer

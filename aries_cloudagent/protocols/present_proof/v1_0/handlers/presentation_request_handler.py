@@ -1,12 +1,12 @@
 """Presentation request message handler."""
 
 from .....indy.holder import IndyHolder
-from .....messaging.base_handler import BaseHandler, BaseResponder, HandlerException
+from .....indy.sdk.models.xform import indy_proof_req_preview2indy_requested_creds
+from .....messaging.base_handler import BaseHandler, HandlerException
 from .....messaging.request_context import RequestContext
+from .....messaging.responder import BaseResponder
 from .....storage.error import StorageNotFoundError
 from .....utils.tracing import trace_event, get_timer
-
-from ...indy.xform import indy_proof_req_preview2indy_requested_creds
 
 from ..manager import PresentationManager
 from ..messages.presentation_proposal import PresentationProposal

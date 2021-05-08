@@ -10,6 +10,9 @@ import asyncio
 from ......cache.base import BaseCache
 from ......indy.issuer import IndyIssuer, IndyIssuerRevocationRegistryFullError
 from ......indy.holder import IndyHolder, IndyHolderError
+from ......indy.sdk.models.cred import IndyCredentialSchema
+from ......indy.sdk.models.cred_request import IndyCredRequestSchema
+from ......indy.sdk.models.cred_abstract import IndyCredAbstractSchema
 from ......ledger.base import BaseLedger
 from ......messaging.credential_definitions.util import (
     CRED_DEF_SENT_RECORD_TYPE,
@@ -36,11 +39,8 @@ from ...messages.cred_request import V20CredRequest
 from ...messages.cred_issue import V20CredIssue
 from ...models.cred_ex_record import V20CredExRecord
 from ...models.detail.indy import V20CredExRecordIndy
-from ..handler import CredFormatAttachment, V20CredFormatError, V20CredFormatHandler
 
-from .models.cred_request import IndyCredRequestSchema
-from .models.cred_abstract import IndyCredAbstractSchema
-from .models.cred import IndyCredentialSchema
+from ..handler import CredFormatAttachment, V20CredFormatError, V20CredFormatHandler
 
 LOGGER = logging.getLogger(__name__)
 

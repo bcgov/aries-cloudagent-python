@@ -1,11 +1,11 @@
-"""Cred artifacts to attach to RFC 453 messages."""
+"""Credential artifacts."""
 
 from typing import Mapping
 
 from marshmallow import EXCLUDE, fields
 
-from .......messaging.models.base import BaseModel, BaseModelSchema
-from .......messaging.valid import (
+from ....messaging.models.base import BaseModel, BaseModelSchema
+from ....messaging.valid import (
     INDY_CRED_DEF_ID,
     INDY_REV_REG_ID,
     INDY_SCHEMA_ID,

@@ -1,8 +1,8 @@
 from unittest import TestCase
 
-from ...models.cred import IndyAttrValue, IndyCredential
-from ...models.cred_abstract import IndyCredAbstract, IndyKeyCorrectnessProof
-from ...models.cred_request import IndyCredRequest
+from ..cred import IndyAttrValue, IndyCredential
+from ..cred_abstract import IndyCredAbstract, IndyKeyCorrectnessProof
+from ..cred_request import IndyCredRequest
 
 KC_PROOF = {
     "c": "123467890",

@@ -1,11 +1,14 @@
 """Record for out of band invitations."""
 
-from typing import Any
+from typing import Any, Mapping, Union
 
 from marshmallow import fields
 
+from .....messaging.models import to_serial
 from .....messaging.models.base_record import BaseExchangeRecord, BaseExchangeSchema
 from .....messaging.valid import UUIDFour
+
+from ..messages.invitation import InvitationMessage, InvitationMessageSchema
 
 
 class InvitationRecord(BaseExchangeRecord):
@@ -31,9 +34,9 @@ class InvitationRecord(BaseExchangeRecord):
         invitation_id: str = None,
         state: str = None,
         invi_msg_id: str = None,
-        invitation: dict = None,  # serialized invitation message
+        invitation: Union[InvitationMessage, Mapping] = None,  # invitation message
         invitation_url: str = None,
-        public_did: str = None,  # public DID in invitation; none if peer DID
+        public_did: str = None,  # backward-compat: BaseRecord.from_storage()
         trace: bool = False,
         **kwargs,
     ):
@@ -42,7 +45,7 @@ class InvitationRecord(BaseExchangeRecord):
         self._id = invitation_id
         self.state = state
         self.invi_msg_id = invi_msg_id
-        self.invitation = invitation
+        self.invitation = to_serial(invitation)
         self.invitation_url = invitation_url
         self.trace = trace
 
@@ -63,6 +66,26 @@ class InvitationRecord(BaseExchangeRecord):
                 "trace",
             )
         }
+
+    def serialize(self, as_string=False) -> Mapping:
+        """
+        Create a JSON-compatible representation of the model instance.
+
+        Args:
+            as_string: return a string of JSON instead of a mapping
+
+        """
+        copy = InvitationRecord(
+            invitation_id=self.invitation_id,
+            **{
+                k: v
+                for k, v in vars(self).items()
+                if k not in ["_id", "_last_state", "invitation"]
+            },
+        )
+        copy.invitation = InvitationMessage.deserialize(self.invitation, none2none=True)
+
+        return super(self.__class__, copy).serialize(as_string)
 
     def __eq__(self, other: Any) -> bool:
         """Comparison between records."""
@@ -92,9 +115,10 @@ class InvitationRecordSchema(BaseExchangeSchema):
         description="Invitation message identifier",
         example=UUIDFour.EXAMPLE,
     )
-    invitation = fields.Dict(
+    invitation = fields.Nested(
+        InvitationMessageSchema(),
         required=False,
-        description="Out of band invitation object",
+        description="Out of band invitation message",
     )
     invitation_url = fields.Str(
         required=False,

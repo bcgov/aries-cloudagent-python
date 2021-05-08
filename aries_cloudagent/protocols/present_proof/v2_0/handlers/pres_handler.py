@@ -1,15 +1,12 @@
 """Presentation message handler."""
 
-from .....messaging.base_handler import (
-    BaseHandler,
-    BaseResponder,
-    RequestContext,
-)
+from .....messaging.base_handler import BaseHandler
+from .....messaging.request_context import RequestContext
+from .....messaging.responder import BaseResponder
+from .....utils.tracing import trace_event, get_timer
 
 from ..manager import V20PresManager
 from ..messages.pres import V20Pres
-
-from .....utils.tracing import trace_event, get_timer
 
 
 class V20PresHandler(BaseHandler):

@@ -19,7 +19,8 @@ from ....core.profile import Profile
 from ....indy.issuer import IndyIssuerError
 from ....ledger.error import LedgerError
 from ....messaging.decorators.attach_decorator import AttachDecorator
-from ....messaging.models.base import BaseModelError, OpenAPISchema
+from ....messaging.models.base import BaseModelError
+from ....messaging.models.openapi import OpenAPISchema
 from ....messaging.valid import (
     ENDPOINT,
     INDY_CRED_DEF_ID,

@@ -4,18 +4,18 @@ from enum import Enum
 from time import time
 from typing import Mapping, Sequence
 
-from marshmallow import fields
+from marshmallow import EXCLUDE, fields
 
-from ....ledger.base import BaseLedger
+from ....ledger.indy import IndySdkLedger
 from ....messaging.models.base import BaseModel, BaseModelSchema
 from ....messaging.util import canon
 from ....messaging.valid import INDY_CRED_DEF_ID, INDY_PREDICATE
-from ....revocation.models.indy import NonRevocationInterval
+from ....protocols.didcomm_prefix import DIDCommPrefix
 from ....wallet.util import b64_to_str
-from ....indy.util import generate_pr_nonce
 
-from ...didcomm_prefix import DIDCommPrefix
+from ...util import generate_pr_nonce
 
+from .non_rev_interval import IndyNonRevocationInterval
 from .predicate import Predicate
 
 PRESENTATION_PREVIEW = "present-proof/1.0/presentation-preview"  # message type
@@ -76,6 +76,7 @@ class IndyPresPredSpecSchema(BaseModelSchema):
         """Predicate specifiation schema metadata."""
 
         model_class = IndyPresPredSpec
+        unknown = EXCLUDE
 
     name = fields.Str(description="Attribute name", required=True, example="high_score")
     cred_def_id = fields.Str(
@@ -213,6 +214,7 @@ class IndyPresAttrSpecSchema(BaseModelSchema):
         """Attribute specifiation schema metadata."""
 
         model_class = IndyPresAttrSpec
+        unknown = EXCLUDE
 
     name = fields.Str(
         description="Attribute name", required=True, example="favourite_drink"
@@ -292,8 +294,8 @@ class IndyPresPreview(BaseModel):
         name: str = None,
         version: str = None,
         nonce: str = None,
-        ledger: BaseLedger = None,
-        non_revoc_intervals: Mapping[str, NonRevocationInterval] = None,
+        ledger: IndySdkLedger = None,
+        non_revoc_intervals: Mapping[str, IndyNonRevocationInterval] = None,
     ) -> dict:
         """
         Return indy proof request corresponding to presentation preview.
@@ -313,14 +315,14 @@ class IndyPresPreview(BaseModel):
 
         """
 
-        def non_revoc(cred_def_id: str) -> NonRevocationInterval:
+        def non_revoc(cred_def_id: str) -> IndyNonRevocationInterval:
             """Non-revocation interval to use for input cred def id."""
 
             nonlocal epoch_now
             nonlocal non_revoc_intervals
 
             return (non_revoc_intervals or {}).get(
-                cred_def_id, NonRevocationInterval(epoch_now, epoch_now)
+                cred_def_id, IndyNonRevocationInterval(epoch_now, epoch_now)
             )
 
         epoch_now = int(time())
@@ -434,6 +436,7 @@ class IndyPresPreviewSchema(BaseModelSchema):
         """Presentation preview schema metadata."""
 
         model_class = IndyPresPreview
+        unknown = EXCLUDE
 
     _type = fields.Str(
         description="Message type identifier",

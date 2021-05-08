@@ -1,7 +1,8 @@
 """Presentation message handler."""
 
-from .....messaging.base_handler import BaseHandler, BaseResponder
+from .....messaging.base_handler import BaseHandler
 from .....messaging.request_context import RequestContext
+from .....messaging.responder import BaseResponder
 from .....utils.tracing import trace_event, get_timer
 
 from ..manager import PresentationManager

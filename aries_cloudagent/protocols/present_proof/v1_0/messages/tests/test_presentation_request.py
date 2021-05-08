@@ -2,12 +2,11 @@ import json
 from datetime import datetime, timezone
 from unittest import TestCase
 
+from ......indy.sdk.models.pres_preview import PRESENTATION_PREVIEW
 from ......messaging.decorators.attach_decorator import AttachDecorator
 from ......messaging.util import str_to_datetime, str_to_epoch
 
 from .....didcomm_prefix import DIDCommPrefix
-
-from ....indy.pres_preview import PRESENTATION_PREVIEW
 
 from ...message_types import ATTACH_DECO_IDS, PRESENTATION_REQUEST
 

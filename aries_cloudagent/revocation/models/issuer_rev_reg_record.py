@@ -8,7 +8,7 @@ from asyncio import shield
 from functools import total_ordering
 from os.path import join
 from shutil import move
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence, Union
 from urllib.parse import urlparse
 
 from marshmallow import fields, validate
@@ -16,6 +16,13 @@ from marshmallow import fields, validate
 from ...core.profile import Profile, ProfileSession
 from ...indy.util import indy_client_dir
 from ...indy.issuer import IndyIssuer, IndyIssuerError
+from ...indy.sdk.models.revocation import (
+    IndyRevRegDef,
+    IndyRevRegDefSchema,
+    IndyRevRegEntry,
+    IndyRevRegEntrySchema,
+)
+from ...messaging.models import to_serial
 from ...messaging.models.base_record import BaseRecord, BaseRecordSchema
 from ...messaging.valid import (
     BASE58_SHA256_HASH,
@@ -76,8 +83,8 @@ class IssuerRevRegRecord(BaseRecord):
         max_cred_num: int = None,
         revoc_def_type: str = None,
         revoc_reg_id: str = None,
-        revoc_reg_def: dict = None,
-        revoc_reg_entry: dict = None,
+        revoc_reg_def: Union[IndyRevRegDef, Mapping] = None,
+        revoc_reg_entry: Union[IndyRevRegEntry, Mapping] = None,
         tag: str = None,
         tails_hash: str = None,
         tails_local_path: str = None,
@@ -95,8 +102,8 @@ class IssuerRevRegRecord(BaseRecord):
         self.max_cred_num = max_cred_num or DEFAULT_REGISTRY_SIZE
         self.revoc_def_type = revoc_def_type or self.REVOC_DEF_TYPE_CL
         self.revoc_reg_id = revoc_reg_id
-        self.revoc_reg_def = revoc_reg_def
-        self.revoc_reg_entry = revoc_reg_entry
+        self.revoc_reg_def = to_serial(revoc_reg_def)
+        self.revoc_reg_entry = to_serial(revoc_reg_entry)
         self.tag = tag
         self.tails_hash = tails_hash
         self.tails_local_path = tails_local_path
@@ -111,7 +118,7 @@ class IssuerRevRegRecord(BaseRecord):
         return self._id
 
     @property
-    def record_value(self) -> dict:
+    def record_value(self) -> Mapping:
         """Accessor for JSON value properties of this revocation registry record."""
         return {
             prop: getattr(self, prop)
@@ -127,6 +134,33 @@ class IssuerRevRegRecord(BaseRecord):
                 "pending_pub",
             )
         }
+
+    def serialize(self, as_string=False) -> Mapping:
+        """
+        Create a JSON-compatible representation of the model instance.
+
+        Args:
+            as_string: return a string of JSON instead of a mapping
+
+        """
+        copy = IssuerRevRegRecord(
+            record_id=self.record_id,
+            **{
+                k: v
+                for k, v in vars(self).items()
+                if k not in ["_id", "_last_state", "revoc_reg_def", "revoc_reg_entry"]
+            },
+        )
+        copy.revoc_reg_def = IndyRevRegDef.deserialize(
+            self.revoc_reg_def,
+            none2none=True,
+        )
+        copy.revoc_reg_entry = IndyRevRegEntry.deserialize(
+            self.revoc_reg_entry,
+            none2none=True,
+        )
+
+        return super(self.__class__, copy).serialize(as_string)
 
     def _check_url(self, url) -> None:
         parsed = urlparse(url)
@@ -435,11 +469,13 @@ class IssuerRevRegRecordSchema(BaseRecordSchema):
     revoc_reg_id = fields.Str(
         required=False, description="Revocation registry identifier", **INDY_REV_REG_ID
     )
-    revoc_reg_def = fields.Dict(
-        required=False, description="Revocation registry definition"
+    revoc_reg_def = fields.Nested(
+        IndyRevRegDefSchema(),
+        required=False,
+        description="Revocation registry definition",
     )
-    revoc_reg_entry = fields.Dict(
-        required=False, description="Revocation registry entry"
+    revoc_reg_entry = fields.Nested(
+        IndyRevRegEntrySchema(), required=False, description="Revocation registry entry"
     )
     tag = fields.Str(
         required=False, description="Tag within issuer revocation registry identifier"

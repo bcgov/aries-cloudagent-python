@@ -18,6 +18,7 @@ from marshmallow.validate import Regexp
 
 from ...admin.request_context import AdminRequestContext
 from ...indy.issuer import IndyIssuer, IndyIssuerError
+from ...indy.sdk.models.schema import SchemaSchema
 from ...ledger.base import BaseLedger
 from ...ledger.error import LedgerError
 from ...protocols.endorse_transaction.v1_0.manager import TransactionManager
@@ -28,7 +29,7 @@ from ...storage.base import BaseStorage
 from ...storage.error import StorageError
 
 from ..models.openapi import OpenAPISchema
-from ..valid import B58, NATURAL_NUM, INDY_SCHEMA_ID, INDY_VERSION
+from ..valid import B58, INDY_SCHEMA_ID, INDY_VERSION
 
 from .util import SchemaQueryStringSchema, SCHEMA_SENT_RECORD_TYPE, SCHEMA_TAGS
 
@@ -66,7 +67,10 @@ class SchemaSendResultSchema(OpenAPISchema):
     schema_id = fields.Str(
         description="Schema identifier", required=True, **INDY_SCHEMA_ID
     )
-    schema = fields.Dict(description="Schema result", required=True)
+    schema = fields.Nested(
+        SchemaSchema(),
+        description="Schema definition",
+    )
 
 
 class TxnOrSchemaSendResultSchema(OpenAPISchema):
@@ -82,27 +86,6 @@ class TxnOrSchemaSendResultSchema(OpenAPISchema):
         required=False,
         description="Schema transaction to endorse",
     )
-
-
-class SchemaSchema(OpenAPISchema):
-    """Content for returned schema."""
-
-    ver = fields.Str(description="Node protocol version", **INDY_VERSION)
-    ident = fields.Str(data_key="id", description="Schema identifier", **INDY_SCHEMA_ID)
-    name = fields.Str(
-        description="Schema name",
-        example=INDY_SCHEMA_ID["example"].split(":")[2],
-    )
-    version = fields.Str(description="Schema version", **INDY_VERSION)
-    attr_names = fields.List(
-        fields.Str(
-            description="Attribute name",
-            example="score",
-        ),
-        description="Schema attribute names",
-        data_key="attrNames",
-    )
-    seqNo = fields.Int(description="Schema sequence number", strict=True, **NATURAL_NUM)
 
 
 class SchemaGetResultSchema(OpenAPISchema):
@@ -134,7 +117,7 @@ class CreateTransactionForEndorserOptionSchema(OpenAPISchema):
     """Class for user to input whether to create a transaction for endorser or not."""
 
     create_transaction_for_endorser = fields.Boolean(
-        description="Create Transaction For Endorser's  signature",
+        description="Create Transaction For Endorser's signature",
         required=False,
     )
 

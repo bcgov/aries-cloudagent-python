@@ -1,5 +1,6 @@
 from asynctest import mock as async_mock, TestCase as AsyncTestCase
 
+from ......indy.sdk.models.pres_preview import IndyPresAttrSpec, IndyPresPreview
 from ......messaging.decorators.attach_decorator import AttachDecorator
 from ......messaging.request_context import RequestContext
 from ......messaging.responder import MockResponder
@@ -7,8 +8,6 @@ from ......storage.error import StorageNotFoundError
 from ......transport.inbound.receipt import MessageReceipt
 
 from .....didcomm_prefix import DIDCommPrefix
-
-from ....indy.pres_preview import IndyPresAttrSpec, IndyPresPreview
 
 from ...messages.pres_format import V20PresFormat
 from ...messages.pres_proposal import V20PresProposal

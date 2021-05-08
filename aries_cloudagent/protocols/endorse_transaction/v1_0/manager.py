@@ -53,8 +53,8 @@ class TransactionManager:
         Create a new Transaction Record.
 
         Args:
+            messages_attach: messages to attach, JSON-dumped
             connection_id: The connection_id of the ConnRecord between author and endorser
-            transaction_message: The actual data in the transaction payload
 
         Returns:
             The transaction Record

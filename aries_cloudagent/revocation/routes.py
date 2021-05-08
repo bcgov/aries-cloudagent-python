@@ -75,7 +75,7 @@ class RevRegCreateRequestSchema(OpenAPISchema):
 class RevRegResultSchema(OpenAPISchema):
     """Result schema for revocation registry creation request."""
 
-    result = IssuerRevRegRecordSchema()
+    result = fields.Nested(IssuerRevRegRecordSchema())
 
 
 class CredRevRecordQueryStringSchema(OpenAPISchema):
@@ -162,7 +162,7 @@ class ClearPendingRevocationsRequestSchema(OpenAPISchema):
 class CredRevRecordResultSchema(OpenAPISchema):
     """Result schema for credential revocation record request."""
 
-    result = IssuerCredRevRecordSchema()
+    result = fields.Nested(IssuerCredRevRecordSchema())
 
 
 class RevRegIssuedResultSchema(OpenAPISchema):

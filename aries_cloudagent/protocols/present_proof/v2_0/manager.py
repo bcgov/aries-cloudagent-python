@@ -10,6 +10,8 @@ from ....connections.models.conn_record import ConnRecord
 from ....core.error import BaseError
 from ....core.profile import Profile
 from ....indy.holder import IndyHolder, IndyHolderError
+from ....indy.sdk.models.predicate import Predicate
+from ....indy.sdk.models.xform import indy_proof_req2non_revoc_intervals
 from ....indy.util import generate_pr_nonce
 from ....indy.verifier import IndyVerifier
 from ....ledger.base import BaseLedger
@@ -18,9 +20,6 @@ from ....messaging.responder import BaseResponder
 from ....messaging.util import canon
 from ....revocation.models.revocation_registry import RevocationRegistry
 from ....storage.error import StorageNotFoundError
-
-from ..indy.predicate import Predicate
-from ..indy.xform import indy_proof_req2non_revoc_intervals
 
 from .models.pres_exchange import V20PresExRecord
 from .message_types import ATTACHMENT_FORMAT, PRES_20_REQUEST, PRES_20

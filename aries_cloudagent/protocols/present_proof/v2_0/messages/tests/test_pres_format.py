@@ -2,9 +2,12 @@ from unittest import TestCase
 
 from marshmallow import ValidationError
 
+from ......indy.sdk.models.pres_preview import (
+    IndyPresAttrSpec,
+    IndyPresPreview,
+    IndyPresPredSpec,
+)
 from ......messaging.decorators.attach_decorator import AttachDecorator
-
-from ....indy.pres_preview import IndyPresAttrSpec, IndyPresPreview, IndyPresPredSpec
 
 from ..pres_format import V20PresFormat
 

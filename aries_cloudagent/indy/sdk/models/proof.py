@@ -2,7 +2,7 @@
 
 from typing import Mapping, Sequence
 
-from marshmallow import fields, validate
+from marshmallow import EXCLUDE, fields, validate
 
 from ....messaging.models.base import BaseModel, BaseModelSchema
 from ....messaging.valid import (
@@ -14,12 +14,11 @@ from ....messaging.valid import (
 )
 from ....utils.tracing import AdminAPIMessageTracingSchema
 
-from ..indy.requested_creds import (
+from .predicate import Predicate
+from .requested_creds import (
     IndyRequestedCredsRequestedAttrSchema,
     IndyRequestedCredsRequestedPredSchema,
 )
-
-from .predicate import Predicate
 
 
 class IndyEQProof(BaseModel):
@@ -57,6 +56,7 @@ class IndyEQProofSchema(BaseModelSchema):
         """Indy equality proof metadata."""
 
         model_class = IndyEQProof
+        unknown = EXCLUDE
 
     revealed_attrs = fields.Dict(
         keys=fields.Str(example="preference"),
@@ -101,6 +101,7 @@ class IndyGEProofPredSchema(BaseModelSchema):
         """Indy GE proof predicate metadata."""
 
         model_class = IndyGEProofPred
+        unknown = EXCLUDE
 
     attr_name = fields.Str(description="Attribute name, indy-canonicalized")
     p_type = fields.Str(
@@ -145,6 +146,7 @@ class IndyGEProofSchema(BaseModelSchema):
         """Indy GE proof schema metadata."""
 
         model_class = IndyGEProof
+        unknown = EXCLUDE
 
     u = fields.Dict(keys=fields.Str(), values=fields.Str(**NUM_STR_WHOLE))
     r = fields.Dict(keys=fields.Str(), values=fields.Str(**NUM_STR_WHOLE))
@@ -181,6 +183,7 @@ class IndyPrimaryProofSchema(BaseModelSchema):
         """Indy primary proof schema metadata."""
 
         model_class = IndyPrimaryProof
+        unknown = EXCLUDE
 
     eq_proof = fields.Nested(
         IndyEQProofSchema, allow_none=True, description="Indy equality proof"
@@ -220,6 +223,7 @@ class IndyNonRevocProofSchema(BaseModelSchema):
         """Indy non-revocation proof schema metadata."""
 
         model_class = IndyNonRevocProof
+        unknown = EXCLUDE
 
     x_list = fields.Dict(keys=fields.Str(), values=fields.Str())
     c_list = fields.Dict(keys=fields.Str(), values=fields.Str())
@@ -252,6 +256,7 @@ class IndyProofProofProofsProofSchema(BaseModelSchema):
         """Indy proof.proof.proofs constituent proof schema metadata."""
 
         model_class = IndyProofProofProofsProof
+        unknown = EXCLUDE
 
     primary_proof = fields.Nested(
         IndyPrimaryProofSchema,
@@ -291,6 +296,7 @@ class IndyProofProofAggregatedProofSchema(BaseModelSchema):
         """Indy proof.proof aggregated proof schema metadata."""
 
         model_class = IndyProofProofAggregatedProof
+        unknown = EXCLUDE
 
     c_hash = fields.Str(description="c_hash value")
     c_list = fields.List(
@@ -326,6 +332,7 @@ class IndyProofProofSchema(BaseModelSchema):
         """Indy proof.proof content schema metadata."""
 
         model_class = IndyProofProof
+        unknown = EXCLUDE
 
     proofs = fields.Nested(
         IndyProofProofProofsProofSchema,
@@ -365,6 +372,7 @@ class RawEncodedSchema(BaseModelSchema):
         """Raw and encoded attribute values schema metadata."""
 
         model_class = RawEncoded
+        unknown = EXCLUDE
 
     raw = fields.Str(description="Raw value")
     encoded = fields.Str(description="Encoded value", **NUM_STR_WHOLE)
@@ -395,6 +403,7 @@ class IndyProofRequestedProofRevealedAttrSchema(RawEncodedSchema):
         """Indy proof requested proof revealed attr schema metadata."""
 
         model_class = IndyProofRequestedProofRevealedAttr
+        unknown = EXCLUDE
 
     sub_proof_index = fields.Int(strict=True, description="Sub-proof index")
 
@@ -426,6 +435,7 @@ class IndyProofRequestedProofRevealedAttrGroupSchema(BaseModelSchema):
         """Indy proof requested proof revealed attr group schema metadata."""
 
         model_class = IndyProofRequestedProofRevealedAttrGroup
+        unknown = EXCLUDE
 
     sub_proof_index = fields.Int(strict=True, description="Sub-proof index")
     values = fields.Dict(
@@ -460,6 +470,7 @@ class IndyProofRequestedProofPredicateSchema(BaseModelSchema):
         """Indy proof requested proof requested proof predicate schema metadata."""
 
         model_class = IndyProofRequestedProofPredicate
+        unknown = EXCLUDE
 
     sub_proof_index = fields.Int(strict=True, description="Sub-proof index")
 
@@ -500,6 +511,7 @@ class IndyProofRequestedProofSchema(BaseModelSchema):
         """Indy proof requested proof schema metadata."""
 
         model_class = IndyProofRequestedProof
+        unknown = EXCLUDE
 
     revealed_attrs = fields.Dict(
         keys=fields.Str(),
@@ -557,6 +569,7 @@ class IndyProofIdentifierSchema(BaseModelSchema):
         """Indy proof identifier schema metadata."""
 
         model_class = IndyProofIdentifier
+        unknown = EXCLUDE
 
     schema_id = fields.Str(description="Schema identifier", **INDY_SCHEMA_ID)
     cred_def_id = fields.Str(
@@ -605,6 +618,7 @@ class IndyProofSchema(BaseModelSchema):
         """Indy proof schema metadata."""
 
         model_class = IndyProof
+        unknown = EXCLUDE
 
     proof = fields.Nested(
         IndyProofProofSchema,

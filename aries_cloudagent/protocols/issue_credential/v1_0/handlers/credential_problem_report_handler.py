@@ -1,7 +1,8 @@
 """Credential problem report message handler."""
 
-from .....messaging.base_handler import BaseHandler, BaseResponder
+from .....messaging.base_handler import BaseHandler
 from .....messaging.request_context import RequestContext
+from .....messaging.responder import BaseResponder
 from .....storage.error import StorageError, StorageNotFoundError
 
 from ..manager import CredentialManager

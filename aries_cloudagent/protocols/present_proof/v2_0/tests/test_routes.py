@@ -8,11 +8,10 @@ from marshmallow import ValidationError
 from .....admin.request_context import AdminRequestContext
 from .....core.in_memory import InMemoryProfile
 from .....indy.holder import IndyHolder
+from .....indy.sdk.models.proof_request import IndyProofReqAttrSpecSchema
 from .....indy.verifier import IndyVerifier
 from .....ledger.base import BaseLedger
 from .....storage.error import StorageNotFoundError
-
-from ...indy.proof_request import IndyProofReqAttrSpecSchema
 
 from .. import routes as test_module
 from ..messages.pres_format import V20PresFormat

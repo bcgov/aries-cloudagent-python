@@ -4,8 +4,8 @@ from typing import Mapping
 
 from marshmallow import EXCLUDE, fields
 
-from .......messaging.models.base import BaseModel, BaseModelSchema
-from .......messaging.valid import INDY_CRED_DEF_ID, INDY_DID, NUM_STR_WHOLE
+from ....messaging.models.base import BaseModel, BaseModelSchema
+from ....messaging.valid import INDY_CRED_DEF_ID, INDY_DID, NUM_STR_WHOLE
 
 
 class IndyCredRequest(BaseModel):

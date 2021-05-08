@@ -1,14 +1,25 @@
 """Aries#0037 v1.0 presentation exchange information with non-secrets storage."""
 
-from os import environ
-from typing import Any
+from typing import Any, Mapping, Union
 
 from marshmallow import fields, validate
 
+from .....indy.sdk.models.proof import IndyProof, IndyProofSchema
+from .....indy.sdk.models.proof_request import IndyProofRequest, IndyProofRequestSchema
+from .....messaging.models import to_serial
 from .....messaging.models.base_record import BaseExchangeRecord, BaseExchangeSchema
 from .....messaging.valid import UUIDFour
 
-unencrypted_tags = environ.get("EXCH_UNENCRYPTED_TAGS", "False").upper() == "TRUE"
+from ..messages.presentation_proposal import (
+    PresentationProposal,
+    PresentationProposalSchema,
+)
+from ..messages.presentation_request import (
+    PresentationRequest,
+    PresentationRequestSchema,
+)
+
+from . import UNENCRYPTED_TAGS
 
 
 class V10PresentationExchange(BaseExchangeRecord):
@@ -22,7 +33,7 @@ class V10PresentationExchange(BaseExchangeRecord):
     RECORD_TYPE = "presentation_exchange_v10"
     RECORD_ID_NAME = "presentation_exchange_id"
     RECORD_TOPIC = "present_proof"
-    TAG_NAMES = {"~thread_id"} if unencrypted_tags else {"thread_id"}
+    TAG_NAMES = {"~thread_id"} if UNENCRYPTED_TAGS else {"thread_id"}
 
     INITIATOR_SELF = "self"
     INITIATOR_EXTERNAL = "external"
@@ -48,14 +59,18 @@ class V10PresentationExchange(BaseExchangeRecord):
         initiator: str = None,
         role: str = None,
         state: str = None,
-        presentation_proposal_dict: dict = None,  # serialized pres proposal message
-        presentation_request: dict = None,  # indy proof req
-        presentation_request_dict: dict = None,  # serialized pres request message
-        presentation: dict = None,  # indy proof
+        presentation_proposal_dict: Union[
+            PresentationProposal, Mapping
+        ] = None,  # aries message
+        presentation_request: Union[IndyProofRequest, Mapping] = None,  # indy proof req
+        presentation_request_dict: Union[
+            PresentationRequest, Mapping
+        ] = None,  # aries message
+        presentation: Union[IndyProof, Mapping] = None,  # indy proof
         verified: str = None,
         auto_present: bool = False,
         error_msg: str = None,
-        trace: bool = False,
+        trace: bool = False,  # backward compat: BaseRecord.from_storage()
         **kwargs
     ):
         """Initialize a new PresentationExchange."""
@@ -65,14 +80,13 @@ class V10PresentationExchange(BaseExchangeRecord):
         self.initiator = initiator
         self.role = role
         self.state = state
-        self.presentation_proposal_dict = presentation_proposal_dict
-        self.presentation_request = presentation_request  # indy proof req
-        self.presentation_request_dict = presentation_request_dict
-        self.presentation = presentation  # indy proof
+        self.presentation_proposal_dict = to_serial(presentation_proposal_dict)
+        self.presentation_request = to_serial(presentation_request)
+        self.presentation_request_dict = to_serial(presentation_request_dict)
+        self.presentation = to_serial(presentation)
         self.verified = verified
         self.auto_present = auto_present
         self.error_msg = error_msg
-        self.trace = trace
 
     @property
     def presentation_exchange_id(self) -> str:
@@ -99,6 +113,45 @@ class V10PresentationExchange(BaseExchangeRecord):
                 "trace",
             )
         }
+
+    def serialize(self, as_string=False) -> Mapping:
+        """
+        Create a JSON-compatible representation of the model instance.
+
+        Args:
+            as_string: return a string of JSON instead of a mapping
+
+        """
+        copy = V10PresentationExchange(
+            presentation_exchange_id=self.presentation_exchange_id,
+            **{
+                k: v
+                for k, v in vars(self).items()
+                if k
+                not in [
+                    "_id",
+                    "_last_state",
+                    "presentation_proposal_dict",
+                    "presentation_request",
+                    "presentation_request_dict",
+                    "presentation",
+                ]
+            }
+        )
+        copy.presentation_proposal_dict = PresentationProposal.deserialize(
+            self.presentation_proposal_dict,
+            none2none=True,
+        )
+        copy.presentation_request = IndyProofRequest.deserialize(
+            self.presentation_request,
+            none2none=True,
+        )
+        copy.presentation_request_dict = PresentationRequest.deserialize(
+            self.presentation_request_dict,
+            none2none=True,
+        )
+        copy.presentation = IndyProof.deserialize(self.presentation, none2none=True)
+        return super(self.__class__, copy).serialize(as_string)
 
     def __eq__(self, other: Any) -> bool:
         """Comparison between records."""
@@ -145,18 +198,25 @@ class V10PresentationExchangeSchema(BaseExchangeSchema):
         description="Present-proof exchange state",
         example=V10PresentationExchange.STATE_VERIFIED,
     )
-    presentation_proposal_dict = fields.Dict(
-        required=False, description="Serialized presentation proposal message"
+    presentation_proposal_dict = fields.Nested(
+        PresentationProposalSchema(),
+        required=False,
+        description="Presentation proposal message",
     )
-    presentation_request = fields.Dict(
+    presentation_request = fields.Nested(
+        IndyProofRequestSchema(),
         required=False,
         description="(Indy) presentation request (also known as proof request)",
     )
-    presentation_request_dict = fields.Dict(
-        required=False, description="Serialized presentation request message"
+    presentation_request_dict = fields.Nested(
+        PresentationRequestSchema(),
+        required=False,
+        description="Presentation request message",
     )
-    presentation = fields.Dict(
-        required=False, description="(Indy) presentation (also known as proof)"
+    presentation = fields.Nested(
+        IndyProofSchema(),
+        required=False,
+        description="(Indy) presentation (also known as proof)",
     )
     verified = fields.Str(  # tag: must be a string
         required=False,
