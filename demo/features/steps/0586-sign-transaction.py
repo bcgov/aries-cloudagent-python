@@ -160,7 +160,7 @@ def step_impl(context, agent_name):
         agent["agent"], "/transactions/" + txn_id + "/write"
     )
 
-    assert written_txn["state"] == "transaction_completed"
+    assert written_txn["state"] == "transaction_acked"
 
 
 @then('"{agent_name}" has written the schema {schema_name} to the ledger')
