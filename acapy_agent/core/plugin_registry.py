@@ -117,70 +117,94 @@ class PluginRegistry:
 
         return True
 
-    def register_plugin(self, module_name: str) -> ModuleType:
+    def register_plugin(self, module_name: str) -> Optional[ModuleType]:
         """Register a plugin module."""
-        if module_name in self._plugins:
-            mod = self._plugins[module_name]
-        elif module_name in self._blocklist:
-            LOGGER.debug(f"Blocked {module_name} from loading due to blocklist")
+        if self._is_already_registered(module_name):
+            return self._plugins.get(module_name)
+
+        if self._is_blocked(module_name):
             return None
-        else:
-            try:
-                mod = ClassLoader.load_module(module_name)
-                LOGGER.debug(f"Loaded module: {module_name}")
-            except ModuleLoadError as e:
-                LOGGER.error(f"Error loading plugin module: {e}")
-                return None
 
-            # Module must exist
-            if not mod:
-                LOGGER.error(f"Module doesn't exist: {module_name}")
-                return None
+        mod = self._load_module(module_name)
+        if not mod:
+            return None
 
-            # Any plugin with a setup method is considered valid.
-            if hasattr(mod, "setup"):
-                self._plugins[module_name] = mod
-                return mod
+        if self._is_valid_plugin(mod, module_name):
+            self._plugins[module_name] = mod
+            LOGGER.debug("Registered plugin: %s", module_name)
+            return mod
 
-            # Make an exception for non-protocol modules
-            # that contain admin routes and for old-style protocol
-            # modules without version support
-            routes = ClassLoader.load_module("routes", module_name)
-            message_types = ClassLoader.load_module("message_types", module_name)
-            if routes or message_types:
-                self._plugins[module_name] = mod
-                return mod
+        LOGGER.debug("Failed to register plugin: %s", module_name)
+        return None
 
-            definition = ClassLoader.load_module("definition", module_name)
+    def _is_already_registered(self, module_name: str) -> bool:
+        """Check if the plugin is already registered."""
+        if module_name in self._plugins:
+            LOGGER.debug("Plugin %s is already registered.", module_name)
+            return True
+        return False
 
-            # definition.py must exist in protocol
-            if not definition:
-                LOGGER.error(f"Protocol does not include definition.py: {module_name}")
-                return None
+    def _is_blocked(self, module_name: str) -> bool:
+        """Check if the plugin is in the blocklist."""
+        if module_name in self._blocklist:
+            LOGGER.debug("Blocked %s from loading due to blocklist.", module_name)
+            return True
+        return False
 
-            # definition.py must include versions attribute
-            if not hasattr(definition, "versions"):
-                LOGGER.error(
-                    "Protocol definition does not include "
-                    f"versions attribute: {module_name}"
-                )
-                return None
+    def _load_module(self, module_name: str) -> Optional[ModuleType]:
+        """Load the plugin module using ClassLoader."""
+        try:
+            mod = ClassLoader.load_module(module_name)
+            LOGGER.debug("Successfully loaded module: %s", module_name)
+            return mod
+        except ModuleLoadError as e:
+            LOGGER.error("Error loading plugin module '%s': %s", module_name, e)
+        return None
 
-            # Definition list must not be malformed
-            try:
-                self.validate_version(definition.versions, module_name)
-            except ProtocolDefinitionValidationError as e:
-                LOGGER.error(f"Protocol versions definition is malformed. {e}")
-                return None
+    def _is_valid_plugin(self, mod: ModuleType, module_name: str) -> bool:
+        """Validate the plugin based on various criteria."""
+        # Check if the plugin has a 'setup' method
+        if hasattr(mod, "setup"):
+            LOGGER.debug("Plugin %s has a 'setup' method.", module_name)
+            return True
 
-        self._plugins[module_name] = mod
-        return mod
+        # Check for 'routes' or 'message_types' modules
+        # This makes an exception for non-protocol modules that contain admin routes
+        # and for old-style protocol modules without version support
+        routes = ClassLoader.load_module("routes", module_name)
+        message_types = ClassLoader.load_module("message_types", module_name)
+        if routes or message_types:
+            LOGGER.debug("Plugin %s has 'routes' or 'message_types'.", module_name)
+            return True
 
-        # # Load each version as a separate plugin
-        # for version in definition.versions:
-        #     mod = ClassLoader.load_module(f"{module_name}.{version['path']}")
-        #     self._plugins[module_name] = mod
-        #     return mod
+        # Check for 'definition' module with 'versions' attribute
+        definition = ClassLoader.load_module("definition", module_name)
+        if not definition:
+            LOGGER.error(
+                "Protocol does not include 'definition.py' for module: %s",
+                module_name,
+            )
+            return False
+
+        if not hasattr(definition, "versions"):
+            LOGGER.error(
+                "Protocol definition does not include versions attribute for module: %s",
+                module_name,
+            )
+            return False
+
+        # Validate the 'versions' attribute
+        try:
+            self.validate_version(definition.versions, module_name)
+            LOGGER.debug("Plugin %s has valid versions.", module_name)
+            return True
+        except ProtocolDefinitionValidationError as e:
+            LOGGER.error(
+                "Protocol versions definition is malformed for module '%s': %s",
+                module_name,
+                e,
+            )
+            return False
 
     def register_package(self, package_name: str) -> Sequence[ModuleType]:
         """Register all modules (sub-packages) under a given package name."""
