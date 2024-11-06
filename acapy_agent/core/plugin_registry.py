@@ -208,21 +208,27 @@ class PluginRegistry:
 
     def register_package(self, package_name: str) -> Sequence[ModuleType]:
         """Register all modules (sub-packages) under a given package name."""
+        LOGGER.debug("Registering package: %s", package_name)
         try:
             module_names = ClassLoader.scan_subpackages(package_name)
         except ModuleLoadError:
             LOGGER.error("Plugin module package not found: %s", package_name)
             module_names = []
-        return list(
-            filter(
-                None,
-                (
-                    self.register_plugin(module_name)
-                    for module_name in module_names
-                    if module_name.split(".")[-1] != "tests"
-                ),
-            )
-        )
+
+        registered_plugins = []
+        for module_name in module_names:
+            # Skip any module whose last segment is 'tests'
+            if module_name.split(".")[-1] == "tests":
+                LOGGER.debug("Skipping test module: %s", module_name)
+                continue
+
+            plugin = self.register_plugin(module_name)
+            if plugin:
+                registered_plugins.append(plugin)
+            else:
+                LOGGER.debug("Failed to register %s under %s", module_name, package_name)
+
+        return registered_plugins
 
     async def init_context(self, context: InjectionContext):
         """Call plugin setup methods on the current context."""
