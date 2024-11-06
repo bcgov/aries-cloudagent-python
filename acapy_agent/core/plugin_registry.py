@@ -3,7 +3,7 @@
 import logging
 from collections import OrderedDict
 from types import ModuleType
-from typing import Iterable, Optional, Sequence
+from typing import Optional, Sequence, Set
 
 from ..config.injection_context import InjectionContext
 from ..core.event_bus import EventBus
@@ -18,10 +18,10 @@ LOGGER = logging.getLogger(__name__)
 class PluginRegistry:
     """Plugin registry for indexing application plugins."""
 
-    def __init__(self, blocklist: Iterable[str] = []):
+    def __init__(self, blocklist: Optional[Set[str]] = None):
         """Initialize a `PluginRegistry` instance."""
-        self._plugins = OrderedDict()
-        self._blocklist = set(blocklist)
+        self._plugins: OrderedDict[str, ModuleType] = OrderedDict()
+        self._blocklist: Set[str] = set(blocklist) if blocklist else set()
 
     @property
     def plugin_names(self) -> Sequence[str]:
@@ -57,7 +57,6 @@ class PluginRegistry:
 
         for version_dict in version_list:
             # Dicts must have correct format
-
             try:
                 if not (
                     isinstance(version_dict["major_version"], int)
@@ -89,8 +88,8 @@ class PluginRegistry:
                 > version_dict["current_minor_version"]
             ):
                 raise ProtocolDefinitionValidationError(
-                    "Minimum supported minor version cannot"
-                    + " be greater than current minor version"
+                    "Minimum supported minor version cannot "
+                    "be greater than current minor version"
                 )
 
             # There can only be one definition per major version
@@ -102,7 +101,7 @@ class PluginRegistry:
             if count > 1:
                 raise ProtocolDefinitionValidationError(
                     "There can only be one definition per major version. "
-                    + f"Found {count} for major version {major_version}."
+                    f"Found {count} for major version {major_version}."
                 )
 
             # Specified module must be loadable
@@ -111,8 +110,7 @@ class PluginRegistry:
 
             if not mod:
                 raise ProtocolDefinitionValidationError(
-                    "Version module path is not "
-                    + f"loadable: {module_name}, {version_path}"
+                    f"Version module path is not loadable: {module_name}, {version_path}"
                 )
 
         return True
@@ -230,7 +228,7 @@ class PluginRegistry:
 
         return registered_plugins
 
-    async def init_context(self, context: InjectionContext):
+    async def init_context(self, context: InjectionContext) -> None:
         """Call plugin setup methods on the current context."""
         for plugin in self._plugins.values():
             if hasattr(plugin, "setup"):
@@ -246,7 +244,7 @@ class PluginRegistry:
         context: InjectionContext,
         mod: ModuleType,
         version_definition: Optional[dict] = None,
-    ):
+    ) -> None:
         """Load a particular protocol version."""
         protocol_registry = context.inject(ProtocolRegistry)
         goal_code_registry = context.inject(GoalCodeRegistry)
@@ -258,7 +256,7 @@ class PluginRegistry:
             protocol_registry.register_controllers(mod.CONTROLLERS)
             goal_code_registry.register_controllers(mod.CONTROLLERS)
 
-    async def load_protocols(self, context: InjectionContext, plugin: ModuleType):
+    async def load_protocols(self, context: InjectionContext, plugin: ModuleType) -> None:
         """For modules that don't implement setup, register protocols manually."""
 
         # If this module contains message_types, then assume that
@@ -293,7 +291,7 @@ class PluginRegistry:
                         LOGGER.error("Error loading plugin module message types: %s", e)
                         return
 
-    async def register_admin_routes(self, app):
+    async def register_admin_routes(self, app) -> None:
         """Call route registration methods on the current context."""
         for plugin in self._plugins.values():
             definition = ClassLoader.load_module("definition", plugin.__name__)
@@ -319,7 +317,7 @@ class PluginRegistry:
                 if mod and hasattr(mod, "register"):
                     await mod.register(app)
 
-    def register_protocol_events(self, context: InjectionContext):
+    def register_protocol_events(self, context: InjectionContext) -> None:
         """Call route register_events methods on the current context."""
         event_bus = context.inject_or(EventBus)
         if not event_bus:
@@ -349,7 +347,7 @@ class PluginRegistry:
                 if mod and hasattr(mod, "register_events"):
                     mod.register_events(event_bus)
 
-    def post_process_routes(self, app):
+    def post_process_routes(self, app) -> None:
         """Call route binary file response OpenAPI fixups if applicable."""
         for plugin in self._plugins.values():
             definition = ClassLoader.load_module("definition", plugin.__name__)
