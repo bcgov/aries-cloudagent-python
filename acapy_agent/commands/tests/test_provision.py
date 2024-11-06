@@ -14,10 +14,10 @@ from .. import provision as test_module
 class TestProvision(IsolatedAsyncioTestCase):
     def test_bad_calls(self):
         with self.assertRaises(ArgsParseError):
-            test_module.execute([])
+            test_module.execute_provision([])
 
         with self.assertRaises(SystemExit):
-            test_module.execute(["bad"])
+            test_module.execute_provision(["bad"])
 
     async def test_provision_ledger_configured(self):
         profile = mock.MagicMock(close=mock.CoroutineMock())
@@ -46,12 +46,17 @@ class TestProvision(IsolatedAsyncioTestCase):
             with self.assertRaises(test_module.ProvisionError):
                 await test_module.provision({})
 
-    def test_main(self):
+    def test_main_entry_point(self):
+        """Test that the execute_provision function is called when the module is run as main."""
         with (
             mock.patch.object(test_module, "__name__", "__main__"),
-            mock.patch.object(test_module, "execute", mock.MagicMock()) as mock_execute,
+            mock.patch.object(
+                test_module, "execute_provision", mock.MagicMock()
+            ) as mock_execute,
         ):
-            test_module.main()
+            import importlib
+
+            importlib.reload(test_module)  # Reload the module to trigger the main guard
             mock_execute.assert_called_once
 
     async def test_provision_should_store_provided_mediation_invite(self):
