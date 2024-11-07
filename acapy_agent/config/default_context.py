@@ -145,19 +145,19 @@ class DefaultContextBuilder(ContextBuilder):
         if not self.settings.get("transport.disabled"):
             plugin_registry.register_package("acapy_agent.protocols")
 
-        # Currently providing admin routes only
-        plugin_registry.register_plugin("acapy_agent.holder")
-
-        plugin_registry.register_plugin("acapy_agent.ledger")
-
-        plugin_registry.register_plugin("acapy_agent.connections")
-        plugin_registry.register_plugin("acapy_agent.messaging.jsonld")
-        plugin_registry.register_plugin("acapy_agent.resolver")
-        plugin_registry.register_plugin("acapy_agent.settings")
-        plugin_registry.register_plugin("acapy_agent.vc")
-        plugin_registry.register_plugin("acapy_agent.vc.data_integrity")
-        plugin_registry.register_plugin("acapy_agent.wallet")
-        plugin_registry.register_plugin("acapy_agent.wallet.keys")
+        # Define plugin groups
+        default_plugins = [
+            "acapy_agent.holder",
+            "acapy_agent.ledger",
+            "acapy_agent.connections",
+            "acapy_agent.messaging.jsonld",
+            "acapy_agent.resolver",
+            "acapy_agent.settings",
+            "acapy_agent.vc",
+            "acapy_agent.vc.data_integrity",
+            "acapy_agent.wallet",
+            "acapy_agent.wallet.keys",
+        ]
 
         anoncreds_plugins = [
             "acapy_agent.anoncreds",
@@ -173,13 +173,19 @@ class DefaultContextBuilder(ContextBuilder):
             "acapy_agent.revocation",
         ]
 
-        def register_askar_plugins():
-            for plugin in askar_plugins:
+        def register_plugins(plugins: list[str], plugin_type: str):
+            """Register a group of plugins with logging."""
+            LOGGER.debug("Registering %s plugins", plugin_type)
+            for plugin in plugins:
                 plugin_registry.register_plugin(plugin)
 
+        def register_askar_plugins():
+            register_plugins(askar_plugins, "askar")
+
         def register_anoncreds_plugins():
-            for plugin in anoncreds_plugins:
-                plugin_registry.register_plugin(plugin)
+            register_plugins(anoncreds_plugins, "anoncreds")
+
+        register_plugins(default_plugins, "default")
 
         if context.settings.get("multitenant.admin_enabled"):
             LOGGER.debug("Multitenant admin enabled - registering additional plugins")
