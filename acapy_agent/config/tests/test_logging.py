@@ -169,43 +169,58 @@ class TestLoggingConfigurator(IsolatedAsyncioTestCase):
 
 class TestLoggingUtils(IsolatedAsyncioTestCase):
     def setUp(self):
-        # Backup existing logging attributes to restore after tests
+        """Set up test environment by backing up logging states and resetting TRACE level."""
+        # Backup existing logging attributes (e.g., DEBUG, INFO)
         self.original_levels = {
             attr: getattr(logging, attr) for attr in dir(logging) if attr.isupper()
         }
+
+        # Backup existing logger class methods (e.g., debug, info)
         self.original_logger_methods = {
             attr: getattr(logging.getLoggerClass(), attr, None)
             for attr in dir(logging.getLoggerClass())
             if not attr.startswith("_")
         }
-        # Reset TRACE level if it exists
+
+        # Remove TRACE level and 'trace' method if they exist
         if hasattr(logging, "TRACE"):
             delattr(logging, "TRACE")
         if hasattr(logging.getLoggerClass(), "trace"):
             delattr(logging.getLoggerClass(), "trace")
-        # Ensure _TRACE_LEVEL_ADDED is False before each test
-        self._trace_level_added_patcher = mock.patch(
+
+        # Patch the TRACE_LEVEL_ADDED flag to False before each test
+        self.trace_level_added_patcher = mock.patch(
             "acapy_agent.config.logging.utils._TRACE_LEVEL_ADDED", False
         )
-        self.mock_trace_level_added = self._trace_level_added_patcher.start()
+        self.mock_trace_level_added = self.trace_level_added_patcher.start()
 
     def tearDown(self):
-        # Restore original logging levels
+        """Restore original logging states after each test."""
+        # Stop patching TRACE_LEVEL_ADDED
+        self.trace_level_added_patcher.stop()
+
+        # Restore original logging level attributes
         for attr, value in self.original_levels.items():
             setattr(logging, attr, value)
-        # Restore original logger methods
-        for attr, method in self.original_logger_methods.items():
-            if method is not None:
-                setattr(logging.getLoggerClass(), attr, method)
-            elif hasattr(logging.getLoggerClass(), attr):
-                delattr(logging.getLoggerClass(), attr)
-        # Remove TRACE if it was added during tests
-        if hasattr(logging, "TRACE"):
-            delattr(logging, "TRACE")
-        if hasattr(logging.getLoggerClass(), "trace"):
-            delattr(logging.getLoggerClass(), "trace")
-        # Stop patching _TRACE_LEVEL_ADDED
-        self._trace_level_added_patcher.stop()
+
+        # Identify and remove any new uppercase attributes added during tests (e.g., TRACE)
+        current_levels = {attr for attr in dir(logging) if attr.isupper()}
+        for attr in current_levels - set(self.original_levels.keys()):
+            delattr(logging, attr)
+
+        # Restore original logger class methods
+        LoggerClass = logging.getLoggerClass()
+        for attr, value in self.original_logger_methods.items():
+            if value is not None:
+                setattr(LoggerClass, attr, value)
+            else:
+                if hasattr(LoggerClass, attr):
+                    delattr(LoggerClass, attr)
+
+        # Identify and remove any new logger methods added during tests (e.g., trace)
+        current_methods = {attr for attr in dir(LoggerClass) if not attr.startswith("_")}
+        for attr in current_methods - set(self.original_logger_methods.keys()):
+            delattr(LoggerClass, attr)
 
     @mock.patch("acapy_agent.config.logging.utils.LOGGER")
     @mock.patch("acapy_agent.config.logging.utils.logging.addLevelName")
