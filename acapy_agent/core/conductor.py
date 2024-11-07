@@ -122,7 +122,7 @@ class Conductor:
         LOGGER.debug("Starting setup of the Conductor")
 
         context = await self.context_builder.build_context()
-        LOGGER.debug("Context built successfully")
+        LOGGER.trace("Context built successfully")
 
         if self.force_agent_anoncreds:
             LOGGER.debug(
@@ -148,15 +148,15 @@ class Conductor:
             await get_genesis_transactions(context.settings)
 
         # Configure the root profile
-        LOGGER.debug("Configuring the root profile and setting up public DID")
+        LOGGER.trace("Configuring the root profile and setting up public DID")
         self.root_profile, self.setup_public_did = await wallet_config(context)
         context = self.root_profile.context
-        LOGGER.debug("Root profile configured successfully")
+        LOGGER.trace("Root profile configured successfully")
 
         # Multiledger Setup
         ledger_config_list = context.settings.get("ledger.ledger_config_list")
         if ledger_config_list and len(ledger_config_list) > 0:
-            LOGGER.debug("Setting up multiledger manager")
+            LOGGER.trace("Setting up multiledger manager")
             context.injector.bind_provider(
                 BaseMultipleLedgerManager,
                 MultiIndyLedgerManagerProvider(self.root_profile),
@@ -172,7 +172,7 @@ class Conductor:
                     self.root_profile.BACKEND_NAME == "askar"
                     and ledger.BACKEND_NAME == "indy-vdr"
                 ):
-                    LOGGER.debug("Binding IndyCredxVerifier for 'askar' backend.")
+                    LOGGER.trace("Binding IndyCredxVerifier for 'askar' backend.")
                     context.injector.bind_provider(
                         IndyVerifier,
                         ClassProvider(
@@ -184,7 +184,7 @@ class Conductor:
                     self.root_profile.BACKEND_NAME == "askar-anoncreds"
                     and ledger.BACKEND_NAME == "indy-vdr"
                 ):
-                    LOGGER.debug(
+                    LOGGER.trace(
                         "Binding IndyCredxVerifier for 'askar-anoncreds' backend."
                     )
                     context.injector.bind_provider(
@@ -223,55 +223,54 @@ class Conductor:
             context.injector.bind_instance(
                 InboundTransportManager, self.inbound_transport_manager
             )
-            LOGGER.debug("Inbound transports registered successfully.")
+            LOGGER.trace("Inbound transports registered successfully.")
 
-        if not context.settings.get("transport.disabled"):
             # Register all outbound transports
-            LOGGER.debug("Transport not disabled. Setting up outbound transports.")
+            LOGGER.debug("Setting up outbound transports.")
             self.outbound_transport_manager = OutboundTransportManager(
                 self.root_profile, self.handle_not_delivered
             )
             await self.outbound_transport_manager.setup()
-            LOGGER.debug("Outbound transports registered successfully.")
+            LOGGER.trace("Outbound transports registered successfully.")
 
         # Initialize dispatcher
-        LOGGER.debug("Initializing dispatcher.")
+        LOGGER.trace("Initializing dispatcher.")
         self.dispatcher = Dispatcher(self.root_profile)
         await self.dispatcher.setup()
-        LOGGER.debug("Dispatcher initialized successfully.")
+        LOGGER.trace("Dispatcher initialized successfully.")
 
         wire_format = context.inject_or(BaseWireFormat)
         if wire_format and hasattr(wire_format, "task_queue"):
             wire_format.task_queue = self.dispatcher.task_queue
-            LOGGER.debug("Wire format task queue bound to dispatcher.")
+            LOGGER.trace("Wire format task queue bound to dispatcher.")
 
         # Bind manager for multitenancy related tasks
         if context.settings.get("multitenant.enabled"):
-            LOGGER.debug("Multitenant is enabled. Binding MultitenantManagerProvider.")
+            LOGGER.trace("Multitenant is enabled. Binding MultitenantManagerProvider.")
             context.injector.bind_provider(
                 BaseMultitenantManager, MultitenantManagerProvider(self.root_profile)
             )
 
         # Bind route manager provider
-        LOGGER.debug("Binding RouteManagerProvider.")
+        LOGGER.trace("Binding RouteManagerProvider.")
         context.injector.bind_provider(
             RouteManager, RouteManagerProvider(self.root_profile)
         )
 
         # Bind OobMessageProcessor to be able to receive and process unencrypted messages
-        LOGGER.debug("Binding OobMessageProcessor.")
+        LOGGER.trace("Binding OobMessageProcessor.")
         context.injector.bind_instance(
             OobMessageProcessor,
             OobMessageProcessor(inbound_message_router=self.inbound_message_router),
         )
 
         # Bind default PyLD document loader
-        LOGGER.debug("Binding default DocumentLoader.")
+        LOGGER.trace("Binding default DocumentLoader.")
         context.injector.bind_instance(DocumentLoader, DocumentLoader(self.root_profile))
 
         # Admin API
         if context.settings.get("admin.enabled"):
-            LOGGER.debug("Admin API is enabled. Attempting to register admin server.")
+            LOGGER.trace("Admin API is enabled. Attempting to register admin server.")
             try:
                 admin_host = context.settings.get("admin.host", "0.0.0.0")
                 admin_port = context.settings.get("admin.port", "80")
@@ -287,7 +286,7 @@ class Conductor:
                     self.get_stats,
                 )
                 context.injector.bind_instance(BaseAdminServer, self.admin_server)
-                LOGGER.debug("Admin server registered on %s:%s.", admin_host, admin_port)
+                LOGGER.debug("Admin server registered on %s:%s", admin_host, admin_port)
             except Exception:
                 LOGGER.exception("Unable to register admin server.")
                 raise
@@ -295,7 +294,7 @@ class Conductor:
         # Fetch stats collector, if any
         collector = context.inject_or(Collector)
         if collector:
-            LOGGER.debug("Stats collector found. Wrapping methods for collection.")
+            LOGGER.trace("Stats collector found. Wrapping methods for collection.")
             # add stats to our own methods
             collector.wrap(
                 self,
@@ -314,7 +313,7 @@ class Conductor:
                     "find_inbound_connection",
                 ),
             )
-            LOGGER.debug("Methods wrapped with stats collector.")
+            LOGGER.trace("Methods wrapped with stats collector.")
 
     async def start(self) -> None:
         """Start the agent."""
