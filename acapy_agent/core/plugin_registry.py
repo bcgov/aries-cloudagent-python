@@ -230,10 +230,17 @@ class PluginRegistry:
 
     async def init_context(self, context: InjectionContext) -> None:
         """Call plugin setup methods on the current context."""
+        LOGGER.debug("Initializing plugin context for %d plugins", len(self._plugins))
+
         for plugin in self._plugins.values():
+            plugin_name = plugin.__name__
             if hasattr(plugin, "setup"):
+                LOGGER.debug("Running setup for plugin: %s", plugin_name)
                 await plugin.setup(context)
             else:
+                LOGGER.debug(
+                    "Loading protocols for plugin without setup: %s", plugin_name
+                )
                 await self.load_protocols(context, plugin)
 
         # register event handlers for each protocol, if provided
