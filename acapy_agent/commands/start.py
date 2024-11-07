@@ -31,7 +31,7 @@ async def start_app(conductor: Conductor):
 
 async def shutdown_app(conductor: Conductor):
     """Shut down."""
-    LOGGER.warning("Shutting down")
+    LOGGER.info("Shutting down")
     await conductor.stop()
 
 
