@@ -318,29 +318,39 @@ class PluginRegistry:
 
     async def register_admin_routes(self, app) -> None:
         """Call route registration methods on the current context."""
+        LOGGER.debug("Registering admin routes for %d plugins", len(self._plugins))
+
         for plugin in self._plugins.values():
-            definition = ClassLoader.load_module("definition", plugin.__name__)
+            plugin_name = plugin.__name__
+            LOGGER.debug("Processing routes for plugin: %s", plugin_name)
+            mod = None
+            definition = ClassLoader.load_module("definition", plugin_name)
             if definition:
                 # Load plugin routes that are in a versioned package.
+                LOGGER.debug("Loading versioned routes for: %s", plugin_name)
                 for plugin_version in definition.versions:
+                    version_path = f"{plugin_name}.{plugin_version['path']}.routes"
                     try:
-                        mod = ClassLoader.load_module(
-                            f"{plugin.__name__}.{plugin_version['path']}.routes"
-                        )
+                        LOGGER.debug("Loading routes from: %s", version_path)
+                        mod = ClassLoader.load_module(version_path)
                     except ModuleLoadError as e:
-                        LOGGER.error("Error loading admin routes: %s", e)
+                        LOGGER.error(
+                            "Error loading admin routes from %s: %s", version_path, e
+                        )
                         continue
-                    if mod and hasattr(mod, "register"):
-                        await mod.register(app)
             else:
                 # Load plugin routes that aren't in a versioned package.
+                routes_path = f"{plugin_name}.routes"
                 try:
-                    mod = ClassLoader.load_module(f"{plugin.__name__}.routes")
+                    LOGGER.debug("Loading non-versioned routes from: %s", routes_path)
+                    mod = ClassLoader.load_module(routes_path)
                 except ModuleLoadError as e:
-                    LOGGER.error("Error loading admin routes: %s", e)
+                    LOGGER.error("Error loading admin routes from %s: %s", routes_path, e)
                     continue
-                if mod and hasattr(mod, "register"):
-                    await mod.register(app)
+
+            if mod and hasattr(mod, "register"):
+                LOGGER.debug("Registering routes from: %s", version_path)
+                await mod.register(app)
 
     def register_protocol_events(self, context: InjectionContext) -> None:
         """Call route register_events methods on the current context."""
