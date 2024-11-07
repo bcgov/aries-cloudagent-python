@@ -145,7 +145,7 @@ class LegacyIndyRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
 
     async def setup(self, context: InjectionContext):
         """Setup."""
-        print("Successfully registered LegacyIndyRegistry")
+        LOGGER.info("Successfully registered LegacyIndyRegistry")
 
     @staticmethod
     def make_schema_id(schema: AnonCredsSchema) -> str:

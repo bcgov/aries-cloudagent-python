@@ -1,6 +1,7 @@
 """Provision command for setting up agent settings before starting."""
 
 import asyncio
+import logging
 from typing import Sequence
 
 from configargparse import ArgumentParser
@@ -21,6 +22,8 @@ from ..protocols.coordinate_mediation.mediation_invite_store import (
 )
 from ..storage.base import BaseStorage
 from . import PROG
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ProvisionError(BaseError):
@@ -58,9 +61,9 @@ async def provision(settings: dict):
                 )
 
         if await ledger_config(root_profile, public_did and public_did.did, True):
-            print("Ledger configured")
+            LOGGER.info("Ledger configured")
         else:
-            print("Ledger not configured")
+            LOGGER.warning("Ledger not configured")
 
         await root_profile.close()
     except BaseError as e:

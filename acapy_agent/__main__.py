@@ -1,7 +1,10 @@
 """acapy_agent package entry point."""
 
+import logging
 import os
 import sys
+
+LOGGER = logging.getLogger(__name__)
 
 
 def init_debug(args):
@@ -26,16 +29,18 @@ def init_debug(args):
             import debugpy
 
             debugpy.listen((DAP_HOST, DAP_PORT))
-            print(f"=== Waiting for debugger to attach to {DAP_HOST}:{DAP_PORT} ===")
+            LOGGER.info(
+                f"=== Waiting for debugger to attach to {DAP_HOST}:{DAP_PORT} ==="
+            )
             debugpy.wait_for_client()
         except ImportError:
-            print("debugpy library was not found")
+            LOGGER.error("debugpy library was not found")
 
     if ENABLE_PYDEVD_PYCHARM or "--debug-pycharm" in args:
         try:
             import pydevd_pycharm
 
-            print(
+            LOGGER.info(
                 "aca-py remote debugging to "
                 f"{PYDEVD_PYCHARM_HOST}:{PYDEVD_PYCHARM_AGENT_PORT}"
             )
@@ -47,7 +52,7 @@ def init_debug(args):
                 suspend=False,
             )
         except ImportError:
-            print("pydevd_pycharm library was not found")
+            LOGGER.error("pydevd_pycharm library was not found")
 
 
 def run(args):

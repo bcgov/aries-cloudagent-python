@@ -31,7 +31,7 @@ async def start_app(conductor: Conductor):
 
 async def shutdown_app(conductor: Conductor):
     """Shut down."""
-    print("\nShutting down")
+    LOGGER.warning("Shutting down")
     await conductor.stop()
 
 
@@ -59,7 +59,7 @@ def execute(argv: Sequence[str] = None):
     # Run the application
     if uvloop:
         uvloop.install()
-        print("uvloop installed")
+        LOGGER.info("uvloop installed")
     run_loop(start_app(conductor), shutdown_app(conductor))
 
 

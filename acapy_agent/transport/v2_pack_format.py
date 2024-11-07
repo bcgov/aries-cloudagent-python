@@ -63,8 +63,7 @@ class V2PackWireFormat(BaseWireFormat):
             try:
                 message_unpack = await messaging.unpack(message_json)
             except CryptoServiceError:
-                LOGGER.debug("Message unpack failed, falling back to JSON")
-                print("HIT CRTYPTO SER ERR EXCEPT BLOC")
+                LOGGER.info("Message unpack failed, falling back to JSON")
             else:
                 # Set message_dict to be the dictionary that we unpacked
                 message_dict = message_unpack.message
