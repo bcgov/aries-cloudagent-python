@@ -47,9 +47,10 @@ class TestProvision(IsolatedAsyncioTestCase):
                 await test_module.provision({})
 
     def test_main(self):
-        with mock.patch.object(test_module, "__name__", "__main__"), mock.patch.object(
-            test_module, "execute", mock.MagicMock()
-        ) as mock_execute:
+        with (
+            mock.patch.object(test_module, "__name__", "__main__"),
+            mock.patch.object(test_module, "execute", mock.MagicMock()) as mock_execute,
+        ):
             test_module.main()
             mock_execute.assert_called_once
 

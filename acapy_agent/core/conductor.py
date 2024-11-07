@@ -317,30 +317,37 @@ class Conductor:
 
     async def start(self) -> None:
         """Start the agent."""
-
+        LOGGER.debug("Starting the Conductor agent.")
         assert self.root_profile, "root_profile is not set"
         context = self.root_profile.context
         await self.check_for_valid_wallet_type(self.root_profile)
+        LOGGER.trace("Wallet type validated.")
 
         if not context.settings.get("transport.disabled"):
             # Start up transports if enabled
             try:
+                LOGGER.trace("Transport not disabled. Starting inbound transports.")
                 await self.inbound_transport_manager.start()
+                LOGGER.trace("Inbound transports started successfully.")
             except Exception:
-                LOGGER.exception("Unable to start inbound transports")
+                LOGGER.exception("Unable to start inbound transports.")
                 raise
             try:
+                LOGGER.trace("Starting outbound transports.")
                 await self.outbound_transport_manager.start()
+                LOGGER.trace("Outbound transports started successfully.")
             except Exception:
-                LOGGER.exception("Unable to start outbound transports")
+                LOGGER.exception("Unable to start outbound transports.")
                 raise
 
         # Start up Admin server
         if self.admin_server:
+            LOGGER.trace("Admin server present. Starting admin server.")
             try:
                 await self.admin_server.start()
+                LOGGER.debug("Admin server started successfully.")
             except Exception:
-                LOGGER.exception("Unable to start administration API")
+                LOGGER.exception("Unable to start administration API.")
             # Make admin responder available during message parsing
             # This allows webhooks to be called when a connection is marked active,
             # for example
@@ -349,9 +356,11 @@ class Conductor:
                 self.admin_server.outbound_message_router,
             )
             context.injector.bind_instance(BaseResponder, responder)
+            LOGGER.trace("Admin responder bound to injector.")
 
         # Get agent label
         default_label = context.settings.get("default_label")
+        LOGGER.debug("Agent label: %s", default_label)
 
         if context.settings.get("transport.disabled"):
             LoggingConfigurator.print_banner(
@@ -376,6 +385,7 @@ class Conductor:
         from_version_storage = None
         from_version = None
         agent_version = f"v{__version__}"
+        LOGGER.trace("Recording ACA-Py version in wallet if needed.")
         async with self.root_profile.session() as session:
             storage: BaseStorage = session.context.inject(BaseStorage)
             try:
@@ -390,9 +400,15 @@ class Conductor:
                 )
             except StorageNotFoundError:
                 LOGGER.warning("Wallet version storage record not found.")
+
         from_version_config = self.root_profile.settings.get("upgrade.from_version")
         force_upgrade_flag = (
             self.root_profile.settings.get("upgrade.force_upgrade") or False
+        )
+        LOGGER.trace(
+            "Force upgrade flag: %s, From version config: %s",
+            force_upgrade_flag,
+            from_version_config,
         )
 
         if force_upgrade_flag and from_version_config:
@@ -405,8 +421,13 @@ class Conductor:
                     from_version = from_version_storage
             else:
                 from_version = from_version_config
+            LOGGER.trace(
+                "Determined from_version based on force_upgrade: %s", from_version
+            )
         else:
             from_version = from_version_storage or from_version_config
+            LOGGER.trace("Determined from_version: %s", from_version)
+
         if not from_version:
             LOGGER.warning(
                 (
@@ -417,17 +438,27 @@ class Conductor:
             )
             from_version = DEFAULT_ACAPY_VERSION
             self.root_profile.settings.set_value("upgrade.from_version", from_version)
+            LOGGER.trace("Set upgrade.from_version to default: %s", from_version)
+
         config_available_list = get_upgrade_version_list(
             config_path=self.root_profile.settings.get("upgrade.config_path"),
             from_version=from_version,
         )
+        LOGGER.trace("Available upgrade versions: %s", config_available_list)
+
         if len(config_available_list) >= 1:
+            LOGGER.info("Upgrade configurations available. Initiating upgrade.")
             await upgrade(profile=self.root_profile)
         elif not (from_version_storage and from_version_storage == agent_version):
+            LOGGER.debug("No upgrades needed. Adding version record.")
             await add_version_record(profile=self.root_profile, version=agent_version)
 
         # Create a static connection for use by the test-suite
         if context.settings.get("debug.test_suite_endpoint"):
+            LOGGER.debug(
+                "Test suite endpoint configured. "
+                "Creating static connection for test suite."
+            )
             mgr = BaseConnectionManager(self.root_profile)
             their_endpoint = context.settings["debug.test_suite_endpoint"]
             _, _, test_conn = await mgr.create_static_connection(
@@ -443,26 +474,31 @@ class Conductor:
                 f" - Their endpoint: {their_endpoint}\n"
             )
             del mgr
+            LOGGER.debug("Static connection for test suite created and manager deleted.")
 
         # Clear default mediator
         if context.settings.get("mediation.clear"):
+            LOGGER.debug("Mediation clear flag set. Clearing default mediator.")
             mediation_mgr = MediationManager(self.root_profile)
             await mediation_mgr.clear_default_mediator()
             LOGGER.info("Default mediator cleared.")
 
-        # Clear default mediator
         # Set default mediator by id
         default_mediator_id = context.settings.get("mediation.default_id")
         if default_mediator_id:
+            LOGGER.debug("Setting default mediator to ID: %s", default_mediator_id)
             mediation_mgr = MediationManager(self.root_profile)
             try:
                 await mediation_mgr.set_default_mediator_by_id(default_mediator_id)
                 LOGGER.info(f"Default mediator set to {default_mediator_id}")
             except Exception:
-                LOGGER.exception("Error updating default mediator")
+                LOGGER.exception("Error updating default mediator.")
 
         # Print an invitation to the terminal
         if context.settings.get("debug.print_invitation"):
+            LOGGER.debug(
+                "Debug flag for printing invitation is set. Creating invitation."
+            )
             try:
                 mgr = OutOfBandManager(self.root_profile)
                 invi_rec = await mgr.create_invitation(
@@ -481,11 +517,13 @@ class Conductor:
                 qr.add_data(invite_url)
                 qr.print_ascii(invert=True)
                 del mgr
+                LOGGER.trace("Invitation created and QR code printed.")
             except Exception:
-                LOGGER.exception("Error creating invitation")
+                LOGGER.exception("Error creating invitation.")
 
         # mediation connection establishment
         provided_invite: str = context.settings.get("mediation.invite")
+        LOGGER.debug("Mediation invite provided: %s", provided_invite)
 
         try:
             async with self.root_profile.session() as session:
@@ -493,19 +531,28 @@ class Conductor:
                 mediation_invite_record = await invite_store.get_mediation_invite_record(
                     provided_invite
                 )
+                LOGGER.debug("Mediation invite record retrieved successfully.")
         except Exception:
-            LOGGER.exception("Error retrieving mediator invitation")
+            LOGGER.exception("Error retrieving mediator invitation.")
             mediation_invite_record = None
 
         # Accept mediation invitation if one was specified or stored
         if mediation_invite_record is not None:
+            LOGGER.debug(
+                "Mediation invite record found. "
+                "Attempting to accept mediation invitation."
+            )
             try:
                 if not mediation_invite_record.used:
-                    # clear previous mediator configuration before establishing a
-                    # new one
+                    # clear previous mediator configuration before establishing a new one
+                    LOGGER.trace(
+                        "Mediation invite not used. "
+                        "Clearing default mediator before accepting new invite."
+                    )
                     await MediationManager(self.root_profile).clear_default_mediator()
 
                     mgr = OutOfBandManager(self.root_profile)
+                    LOGGER.debug("Receiving mediation invitation.")
                     record = await mgr.receive_invitation(
                         invitation=InvitationMessage.from_url(
                             mediation_invite_record.invite
@@ -516,6 +563,7 @@ class Conductor:
                         await MediationInviteStore(
                             session.context.inject(BaseStorage)
                         ).mark_default_invite_as_used()
+                        LOGGER.trace("Marked mediation invite as used.")
 
                         await record.metadata_set(
                             session, MediationManager.SEND_REQ_AFTER_CONNECTION, True
@@ -523,48 +571,65 @@ class Conductor:
                         await record.metadata_set(
                             session, MediationManager.SET_TO_DEFAULT_ON_GRANTED, True
                         )
+                        LOGGER.trace("Set mediation metadata after connection.")
 
                     LOGGER.info("Attempting to connect to mediator...")
                     del mgr
+                    LOGGER.trace("Mediation manager deleted after setting up mediator.")
             except Exception:
-                LOGGER.exception("Error accepting mediation invitation")
+                LOGGER.exception("Error accepting mediation invitation.")
 
         try:
+            LOGGER.debug("Checking for wallet upgrades in progress.")
             await self.check_for_wallet_upgrades_in_progress()
+            LOGGER.debug("Wallet upgrades check completed.")
         except Exception:
             LOGGER.exception(
-                "An exception was caught while checking for wallet upgrades in progress"
+                "An exception was caught while checking for wallet upgrades in progress."
             )
 
         # notify protocols of startup status
+        LOGGER.trace("Notifying protocols of startup status.")
         await self.root_profile.notify(STARTUP_EVENT_TOPIC, {})
+        LOGGER.debug("Startup notification sent.")
 
     async def stop(self, timeout=1.0):
         """Stop the agent."""
+        LOGGER.info("Stopping the Conductor agent.")
         # notify protocols that we are shutting down
         if self.root_profile:
+            LOGGER.debug("Notifying protocols of shutdown.")
             await self.root_profile.notify(SHUTDOWN_EVENT_TOPIC, {})
+            LOGGER.debug("Shutdown notification sent.")
 
         shutdown = TaskQueue()
         if self.dispatcher:
+            LOGGER.trace("Initiating shutdown of dispatcher.")
             shutdown.run(self.dispatcher.complete())
         if self.admin_server:
+            LOGGER.trace("Initiating shutdown of admin server.")
             shutdown.run(self.admin_server.stop())
         if self.inbound_transport_manager:
+            LOGGER.trace("Initiating shutdown of inbound transport manager.")
             shutdown.run(self.inbound_transport_manager.stop())
         if self.outbound_transport_manager:
+            LOGGER.trace("Initiating shutdown of outbound transport manager.")
             shutdown.run(self.outbound_transport_manager.stop())
 
         if self.root_profile:
             # close multitenant profiles
             multitenant_mgr = self.context.inject_or(BaseMultitenantManager)
             if multitenant_mgr:
+                LOGGER.debug("Closing multitenant profiles.")
                 for profile in multitenant_mgr.open_profiles:
+                    LOGGER.trace("Closing profile: %s", profile.name)
                     shutdown.run(profile.close())
-
+            LOGGER.debug("Closing root profile.")
             shutdown.run(self.root_profile.close())
 
+        LOGGER.trace("Waiting for shutdown tasks to complete with timeout=%f.", timeout)
         await shutdown.complete(timeout)
+        LOGGER.info("Conductor agent stopped successfully.")
 
     def inbound_message_router(
         self,
