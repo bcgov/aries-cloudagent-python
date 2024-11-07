@@ -354,33 +354,42 @@ class PluginRegistry:
 
     def register_protocol_events(self, context: InjectionContext) -> None:
         """Call route register_events methods on the current context."""
+        LOGGER.debug("Registering protocol events for %d plugins", len(self._plugins))
+
         event_bus = context.inject_or(EventBus)
         if not event_bus:
             LOGGER.error("No event bus in context")
             return
+
         for plugin in self._plugins.values():
-            definition = ClassLoader.load_module("definition", plugin.__name__)
+            plugin_name = plugin.__name__
+            LOGGER.debug("Processing events for plugin: %s", plugin_name)
+            mod = None
+            definition = ClassLoader.load_module("definition", plugin_name)
             if definition:
                 # Load plugin routes that are in a versioned package.
+                LOGGER.debug("Loading versioned events for: %s", plugin_name)
                 for plugin_version in definition.versions:
+                    version_path = f"{plugin_name}.{plugin_version['path']}.routes"
                     try:
-                        mod = ClassLoader.load_module(
-                            f"{plugin.__name__}.{plugin_version['path']}.routes"
-                        )
+                        LOGGER.debug("Loading events from: %s", version_path)
+                        mod = ClassLoader.load_module(version_path)
                     except ModuleLoadError as e:
-                        LOGGER.error("Error loading admin routes: %s", e)
+                        LOGGER.error("Error loading events from %s: %s", version_path, e)
                         continue
-                    if mod and hasattr(mod, "register_events"):
-                        mod.register_events(event_bus)
             else:
                 # Load plugin routes that aren't in a versioned package.
+                routes_path = f"{plugin_name}.routes"
                 try:
-                    mod = ClassLoader.load_module(f"{plugin.__name__}.routes")
+                    LOGGER.debug("Loading non-versioned events from: %s", routes_path)
+                    mod = ClassLoader.load_module(routes_path)
                 except ModuleLoadError as e:
-                    LOGGER.error("Error loading admin routes: %s", e)
+                    LOGGER.error("Error loading events from %s: %s", routes_path, e)
                     continue
-                if mod and hasattr(mod, "register_events"):
-                    mod.register_events(event_bus)
+
+            if mod and hasattr(mod, "register_events"):
+                LOGGER.debug("Registering events from: %s", version_path)
+                mod.register_events(event_bus)
 
     def post_process_routes(self, app) -> None:
         """Call route binary file response OpenAPI fixups if applicable."""
