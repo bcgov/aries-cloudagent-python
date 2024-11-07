@@ -1,5 +1,7 @@
 """Classes for configuring the default injection context."""
 
+import logging
+
 from ..anoncreds.registry import AnonCredsRegistry
 from ..cache.base import BaseCache
 from ..cache.in_memory import InMemoryCache
@@ -27,17 +29,22 @@ from .base_context import ContextBuilder
 from .injection_context import InjectionContext
 from .provider import CachedProvider, ClassProvider
 
+LOGGER = logging.getLogger(__name__)
+
 
 class DefaultContextBuilder(ContextBuilder):
     """Default context builder."""
 
     async def build_context(self) -> InjectionContext:
         """Build the base injection context; set DIDComm prefix to emit."""
+        LOGGER.debug("Building new injection context with settings: %s", self.settings)
+
         context = InjectionContext(settings=self.settings)
         context.settings.set_default("default_label", "Aries Cloud Agent")
 
         if context.settings.get("timing.enabled"):
             timing_log = context.settings.get("timing.log_file")
+            LOGGER.debug("Enabling timing collector with log file: %s", timing_log)
             collector = Collector(log_path=timing_log)
             context.injector.bind_instance(Collector, collector)
 
@@ -64,11 +71,8 @@ class DefaultContextBuilder(ContextBuilder):
 
         # DIDComm Messaging
         if context.settings.get("experiment.didcomm_v2"):
-            from didcomm_messaging import (
-                CryptoService,
-                PackagingService,
-                RoutingService,
-            )
+            LOGGER.info("DIDComm v2 experimental mode enabled")
+            from didcomm_messaging import CryptoService, PackagingService, RoutingService
             from didcomm_messaging.crypto.backend.askar import AskarCryptoService
 
             context.injector.bind_instance(CryptoService, AskarCryptoService())
@@ -82,11 +86,13 @@ class DefaultContextBuilder(ContextBuilder):
 
     async def bind_providers(self, context: InjectionContext):
         """Bind various class providers."""
+        LOGGER.debug("Begin binding providers to context")
 
         context.injector.bind_provider(ProfileManager, ProfileManagerProvider())
 
         wallet_type = self.settings.get("wallet.type")
         if wallet_type == "askar-anoncreds":
+            LOGGER.debug("Using AnonCreds tails server")
             context.injector.bind_provider(
                 BaseTailsServer,
                 ClassProvider(
@@ -94,6 +100,7 @@ class DefaultContextBuilder(ContextBuilder):
                 ),
             )
         else:
+            LOGGER.debug("Using Indy tails server")
             context.injector.bind_provider(
                 BaseTailsServer,
                 ClassProvider(
@@ -127,6 +134,7 @@ class DefaultContextBuilder(ContextBuilder):
     async def load_plugins(self, context: InjectionContext):
         """Set up plugin registry and load plugins."""
 
+        LOGGER.debug("Initializing plugin registry")
         plugin_registry = PluginRegistry(
             blocklist=self.settings.get("blocked_plugins", [])
         )
@@ -174,6 +182,7 @@ class DefaultContextBuilder(ContextBuilder):
                 plugin_registry.register_plugin(plugin)
 
         if context.settings.get("multitenant.admin_enabled"):
+            LOGGER.debug("Multitenant admin enabled - registering additional plugins")
             plugin_registry.register_plugin("acapy_agent.multitenant.admin")
             register_askar_plugins()
             register_anoncreds_plugins()
@@ -185,6 +194,7 @@ class DefaultContextBuilder(ContextBuilder):
 
         # Register external plugins
         for plugin_path in self.settings.get("external_plugins", []):
+            LOGGER.debug("Registering external plugin: %s", plugin_path)
             plugin_registry.register_plugin(plugin_path)
 
         # Register message protocols
