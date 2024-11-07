@@ -154,16 +154,14 @@ class Conductor:
         LOGGER.debug("Root profile configured successfully")
 
         # Multiledger Setup
-        if (
-            context.settings.get("ledger.ledger_config_list")
-            and len(context.settings.get("ledger.ledger_config_list")) > 0
-        ):
+        ledger_config_list = context.settings.get("ledger.ledger_config_list")
+        if ledger_config_list and len(ledger_config_list) > 0:
             LOGGER.debug("Setting up multiledger manager")
             context.injector.bind_provider(
                 BaseMultipleLedgerManager,
                 MultiIndyLedgerManagerProvider(self.root_profile),
             )
-            if not (context.settings.get("ledger.genesis_transactions")):
+            if not context.settings.get("ledger.genesis_transactions"):
                 ledger = context.injector.inject(BaseLedger)
                 LOGGER.debug(
                     "Ledger backend: %s, Profile backend: %s",
@@ -207,9 +205,10 @@ class Conductor:
         )
 
         # Configure the ledger
-        if not await ledger_config(
+        ledger_configured = await ledger_config(
             self.root_profile, self.setup_public_did and self.setup_public_did.did
-        ):
+        )
+        if not ledger_configured:
             LOGGER.warning("No ledger configured.")
         else:
             LOGGER.debug("Ledger configured successfully.")

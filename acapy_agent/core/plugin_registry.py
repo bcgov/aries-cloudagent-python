@@ -349,7 +349,7 @@ class PluginRegistry:
                     continue
 
             if mod and hasattr(mod, "register"):
-                LOGGER.debug("Registering routes from: %s", version_path)
+                LOGGER.debug("Registering routes for: %s", plugin_name)
                 await mod.register(app)
 
     def register_protocol_events(self, context: InjectionContext) -> None:
