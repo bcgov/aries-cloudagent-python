@@ -70,7 +70,7 @@ async def provision(settings: dict):
         raise ProvisionError("Error during provisioning") from e
 
 
-def execute_provision(argv: Sequence[str] = None):
+def execute(argv: Sequence[str] = None):
     """Entrypoint."""
     parser = arg.create_argument_parser(prog=PROG)
     parser.prog += " provision"
@@ -87,5 +87,10 @@ def execute_provision(argv: Sequence[str] = None):
     loop.run_until_complete(provision(settings))
 
 
-if __name__ == "__main__":
-    execute_provision()
+def main():
+    """Execute the main line."""
+    if __name__ == "__main__":
+        execute()
+
+
+main()
