@@ -22,7 +22,9 @@ class ClassLoader:
     """Class used to load classes from modules dynamically."""
 
     @classmethod
-    def load_module(cls, mod_path: str, package: Optional[str] = None) -> ModuleType:
+    def load_module(
+        cls, mod_path: str, package: Optional[str] = None
+    ) -> Optional[ModuleType]:
         """Load a module by its absolute path.
 
         Args:

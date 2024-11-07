@@ -309,7 +309,6 @@ class PluginRegistry:
                     try:
                         LOGGER.trace("Loading message types from: %s", version_path)
                         mod = ClassLoader.load_module(version_path)
-                        await self.load_protocol_version(context, mod, protocol_version)
                     except ModuleLoadError as e:
                         LOGGER.error(
                             "Error loading plugin module message types from %s: %s",
@@ -317,6 +316,11 @@ class PluginRegistry:
                             e,
                         )
                         return
+
+                    if mod:
+                        await self.load_protocol_version(context, mod, protocol_version)
+                    else:
+                        LOGGER.debug("Failed to load %s", version_path)
 
     async def register_admin_routes(self, app) -> None:
         """Call route registration methods on the current context."""
