@@ -3,6 +3,8 @@
 import logging
 from functools import partial, partialmethod
 from typing import Optional
+
+LOGGER = logging.getLogger(__name__)
 _TRACE_LEVEL_ADDED = False
 
 
@@ -89,18 +91,14 @@ def add_trace_level() -> None:
     if not level_exists or not method_exists:
         try:
             add_logging_level(TRACE_LEVEL_NAME, TRACE_LEVEL_NUM, TRACE_METHOD_NAME)
-            logging.getLogger(__name__).debug(
-                f"{TRACE_LEVEL_NAME} level added to logging module."
-            )
+            LOGGER.debug("%s level added to logging module.", TRACE_LEVEL_NAME)
         except AttributeError as e:
             # Log a warning if TRACE level already exists
-            logging.getLogger(__name__).warning(
-                f"{TRACE_LEVEL_NAME} level already exists: {e}"
-            )
+            LOGGER.warning("%s level already exists: %s", TRACE_LEVEL_NAME, e)
     else:
         # Optionally, you can log that TRACE level is already present
-        logging.getLogger(__name__).debug(
-            f"{TRACE_LEVEL_NAME} level is already present in the logging module."
+        LOGGER.debug(
+            "%s level is already present in the logging module.", TRACE_LEVEL_NAME
         )
 
     _TRACE_LEVEL_ADDED = True
