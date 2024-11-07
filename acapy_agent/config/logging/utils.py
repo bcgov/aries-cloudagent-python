@@ -3,6 +3,7 @@
 import logging
 from functools import partial, partialmethod
 from typing import Optional
+_TRACE_LEVEL_ADDED = False
 
 
 def add_logging_level(
@@ -66,6 +67,11 @@ def add_trace_level() -> None:
     Returns:
         None
     """
+    global _TRACE_LEVEL_ADDED
+
+    if _TRACE_LEVEL_ADDED:
+        return
+
     TRACE_LEVEL_NUM = logging.DEBUG - 5
     TRACE_LEVEL_NAME = "TRACE"
     TRACE_METHOD_NAME = "trace"
@@ -96,3 +102,5 @@ def add_trace_level() -> None:
         logging.getLogger(__name__).debug(
             f"{TRACE_LEVEL_NAME} level is already present in the logging module."
         )
+
+    _TRACE_LEVEL_ADDED = True
