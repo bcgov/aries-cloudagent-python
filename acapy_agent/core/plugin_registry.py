@@ -125,6 +125,7 @@ class PluginRegistry:
 
         mod = self._load_module(module_name)
         if not mod:
+            LOGGER.error("Module doesn't exist: %s", module_name)
             return None
 
         if self._is_valid_plugin(mod, module_name):
@@ -153,7 +154,6 @@ class PluginRegistry:
         """Load the plugin module using ClassLoader."""
         try:
             mod = ClassLoader.load_module(module_name)
-            LOGGER.debug("Successfully loaded module: %s", module_name)
             return mod
         except ModuleLoadError as e:
             LOGGER.error("Error loading plugin module '%s': %s", module_name, e)
