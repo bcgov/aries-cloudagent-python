@@ -1,9 +1,11 @@
 import contextlib
+import logging
 from io import BufferedReader, StringIO, TextIOWrapper
 from tempfile import NamedTemporaryFile
 from unittest import IsolatedAsyncioTestCase, mock
 
 from ..logging import configurator as test_module
+from ..logging import utils
 
 
 class TestLoggingConfigurator(IsolatedAsyncioTestCase):
@@ -163,3 +165,116 @@ class TestLoggingConfigurator(IsolatedAsyncioTestCase):
             mock_files.return_value.joinpath.assert_called_once_with("def")
             mock_resource_path.open.assert_called_once_with("rb")
             assert result == mock_resource_handle  # Verify the returned binary stream
+
+
+class TestLoggingUtils(IsolatedAsyncioTestCase):
+    def setUp(self):
+        # Backup existing logging attributes to restore after tests
+        self.original_levels = {
+            attr: getattr(logging, attr) for attr in dir(logging) if attr.isupper()
+        }
+        self.original_logger_methods = {
+            attr: getattr(logging.getLoggerClass(), attr, None)
+            for attr in dir(logging.getLoggerClass())
+            if not attr.startswith("_")
+        }
+        # Reset TRACE level if it exists
+        if hasattr(logging, "TRACE"):
+            delattr(logging, "TRACE")
+        if hasattr(logging.getLoggerClass(), "trace"):
+            delattr(logging.getLoggerClass(), "trace")
+        # Ensure _TRACE_LEVEL_ADDED is False before each test
+        self._trace_level_added_patcher = mock.patch(
+            "acapy_agent.config.logging.utils._TRACE_LEVEL_ADDED", False
+        )
+        self.mock_trace_level_added = self._trace_level_added_patcher.start()
+
+    def tearDown(self):
+        # Restore original logging levels
+        for attr, value in self.original_levels.items():
+            setattr(logging, attr, value)
+        # Restore original logger methods
+        for attr, method in self.original_logger_methods.items():
+            if method is not None:
+                setattr(logging.getLoggerClass(), attr, method)
+            elif hasattr(logging.getLoggerClass(), attr):
+                delattr(logging.getLoggerClass(), attr)
+        # Remove TRACE if it was added during tests
+        if hasattr(logging, "TRACE"):
+            delattr(logging, "TRACE")
+        if hasattr(logging.getLoggerClass(), "trace"):
+            delattr(logging.getLoggerClass(), "trace")
+        # Stop patching _TRACE_LEVEL_ADDED
+        self._trace_level_added_patcher.stop()
+
+    @mock.patch("acapy_agent.config.logging.utils.LOGGER")
+    @mock.patch("acapy_agent.config.logging.utils.logging.addLevelName")
+    def test_add_logging_level_success(self, mock_addLevelName, mock_logger):
+        utils.add_logging_level("CUSTOM", 2)
+
+        mock_addLevelName.assert_called_once_with(2, "CUSTOM")
+        self.assertTrue(hasattr(logging, "CUSTOM"))
+        self.assertEqual(logging.CUSTOM, 2)
+
+        logger = logging.getLogger(__name__)
+        self.assertTrue(hasattr(logger, "custom"))
+        self.assertTrue(callable(logger.custom))
+
+        self.assertTrue(hasattr(logging, "custom"))
+        self.assertTrue(callable(logging.custom))
+
+    def test_add_logging_level_existing_level_name(self):
+        # Add a level named 'DEBUG' which already exists
+        with self.assertRaises(AttributeError) as context:
+            utils.add_logging_level("DEBUG", 15)
+        self.assertIn("DEBUG already defined in logging module", str(context.exception))
+
+    def test_add_logging_level_existing_method_name(self):
+        # Add a logging method that already exists ('debug')
+        with self.assertRaises(AttributeError) as context:
+            utils.add_logging_level("CUSTOM", 25, method_name="debug")
+        self.assertIn("debug already defined in logging module", str(context.exception))
+
+    @mock.patch("acapy_agent.config.logging.utils.add_logging_level")
+    @mock.patch("acapy_agent.config.logging.utils.LOGGER")
+    def test_add_trace_level_new(self, mock_logger, mock_add_logging_level):
+        # Ensure _TRACE_LEVEL_ADDED is False
+        utils.add_trace_level()
+
+        mock_add_logging_level.assert_called_once_with(
+            "TRACE", logging.DEBUG - 5, "trace"
+        )
+
+        # Verify logger.debug was called
+        mock_logger.debug.assert_called_with("%s level added to logging module.", "TRACE")
+
+        # Check that _TRACE_LEVEL_ADDED is now True
+        self.assertTrue(utils._TRACE_LEVEL_ADDED)
+
+    @mock.patch("acapy_agent.config.logging.utils.LOGGER")
+    @mock.patch(
+        "acapy_agent.config.logging.utils.add_logging_level",
+        side_effect=AttributeError("TRACE already exists"),
+    )
+    def test_add_trace_level_already_exists_exception(
+        self, mock_add_logging_level, mock_logger
+    ):
+        utils.add_trace_level()
+
+        # Verify logger.warning was called
+        mock_logger.warning.assert_called_with(
+            "%s level already exists: %s", "TRACE", mock_add_logging_level.side_effect
+        )
+
+    @mock.patch("acapy_agent.config.logging.utils.LOGGER")
+    @mock.patch("acapy_agent.config.logging.utils.add_logging_level")
+    def test_add_trace_level_already_present(self, mock_add_logging_level, mock_logger):
+        # Manually set _TRACE_LEVEL_ADDED to True to simulate already added TRACE level
+        with mock.patch("acapy_agent.config.logging.utils._TRACE_LEVEL_ADDED", True):
+            utils.add_trace_level()
+
+            # add_logging_level should not be called since TRACE level is already added
+            mock_add_logging_level.assert_not_called()
+
+            # Verify logger.debug was not called
+            mock_logger.debug.assert_not_called()
