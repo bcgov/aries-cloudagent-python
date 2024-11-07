@@ -255,11 +255,18 @@ class PluginRegistry:
         """Load a particular protocol version."""
         protocol_registry = context.inject(ProtocolRegistry)
         goal_code_registry = context.inject(GoalCodeRegistry)
+
+        module_name = mod.__name__
+        LOGGER.debug("Loading protocol version for module: %s", module_name)
+
         if hasattr(mod, "MESSAGE_TYPES"):
+            LOGGER.debug("Registering message types for: %s", module_name)
             protocol_registry.register_message_types(
                 mod.MESSAGE_TYPES, version_definition=version_definition
             )
+
         if hasattr(mod, "CONTROLLERS"):
+            LOGGER.debug("Registering controllers for: %s", module_name)
             protocol_registry.register_controllers(mod.CONTROLLERS)
             goal_code_registry.register_controllers(mod.CONTROLLERS)
 
