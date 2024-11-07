@@ -224,10 +224,10 @@ class TestLoggingUtils(IsolatedAsyncioTestCase):
 
     @mock.patch("acapy_agent.config.logging.utils.LOGGER")
     @mock.patch("acapy_agent.config.logging.utils.logging.addLevelName")
-    def test_add_logging_level_success(self, mock_addLevelName, mock_logger):
+    def test_add_logging_level_success(self, mock_add_level_name, mock_logger):
         utils.add_logging_level("CUSTOM", 2)
 
-        mock_addLevelName.assert_called_once_with(2, "CUSTOM")
+        mock_add_level_name.assert_called_once_with(2, "CUSTOM")
         self.assertTrue(hasattr(logging, "CUSTOM"))
         self.assertEqual(logging.CUSTOM, 2)
 

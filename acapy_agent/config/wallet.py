@@ -65,8 +65,8 @@ async def wallet_config(
             LOGGER.info("Created new profile")
         else:
             LOGGER.info("Opened existing profile")
-        LOGGER.info("Profile backend:", profile.backend)
-        LOGGER.info("Profile name:", profile.name)
+        LOGGER.info("Profile backend: %s", profile.backend)
+        LOGGER.info("Profile name: %s", profile.name)
 
     wallet_seed = context.settings.get("wallet.seed")
     wallet_local_did = context.settings.get("wallet.local_did")
