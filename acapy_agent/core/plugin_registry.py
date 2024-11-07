@@ -422,7 +422,7 @@ class PluginRegistry:
                     continue
 
             if mod and hasattr(mod, "post_process_routes"):
-                LOGGER.debug("Post-processing routes from: %s", version_path)
+                LOGGER.debug("Post-processing routes for %s", plugin_name)
                 mod.post_process_routes(app)
 
     def __repr__(self) -> str:

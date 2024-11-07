@@ -259,7 +259,7 @@ class Conductor:
             RouteManager, RouteManagerProvider(self.root_profile)
         )
 
-        # Bind oob message processor to be able to receive and process un-encrypted messages
+        # Bind OobMessageProcessor to be able to receive and process unencrypted messages
         LOGGER.debug("Binding OobMessageProcessor.")
         context.injector.bind_instance(
             OobMessageProcessor,
