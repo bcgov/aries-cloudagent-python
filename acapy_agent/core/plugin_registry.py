@@ -393,29 +393,37 @@ class PluginRegistry:
 
     def post_process_routes(self, app) -> None:
         """Call route binary file response OpenAPI fixups if applicable."""
+        LOGGER.debug("Post-processing routes for %d plugins", len(self._plugins))
+
         for plugin in self._plugins.values():
-            definition = ClassLoader.load_module("definition", plugin.__name__)
+            plugin_name = plugin.__name__
+            LOGGER.debug("Post-processing routes for plugin: %s", plugin_name)
+            mod = None
+            definition = ClassLoader.load_module("definition", plugin_name)
             if definition:
                 # Set binary file responses for routes that are in a versioned package.
+                LOGGER.debug("Processing versioned routes for: %s", plugin_name)
                 for plugin_version in definition.versions:
+                    version_path = f"{plugin_name}.{plugin_version['path']}.routes"
                     try:
-                        mod = ClassLoader.load_module(
-                            f"{plugin.__name__}.{plugin_version['path']}.routes"
-                        )
+                        LOGGER.debug("Loading routes from: %s", version_path)
+                        mod = ClassLoader.load_module(version_path)
                     except ModuleLoadError as e:
-                        LOGGER.error("Error loading admin routes: %s", e)
+                        LOGGER.error("Error loading routes from %s: %s", version_path, e)
                         continue
-                    if mod and hasattr(mod, "post_process_routes"):
-                        mod.post_process_routes(app)
             else:
                 # Set binary file responses for routes not in a versioned package.
+                routes_path = f"{plugin_name}.routes"
                 try:
-                    mod = ClassLoader.load_module(f"{plugin.__name__}.routes")
+                    LOGGER.debug("Loading non-versioned routes from: %s", routes_path)
+                    mod = ClassLoader.load_module(routes_path)
                 except ModuleLoadError as e:
-                    LOGGER.error("Error loading admin routes: %s", e)
+                    LOGGER.error("Error loading routes from %s: %s", routes_path, e)
                     continue
-                if mod and hasattr(mod, "post_process_routes"):
-                    mod.post_process_routes(app)
+
+            if mod and hasattr(mod, "post_process_routes"):
+                LOGGER.debug("Post-processing routes from: %s", version_path)
+                mod.post_process_routes(app)
 
     def __repr__(self) -> str:
         """Return a string representation for this class."""
