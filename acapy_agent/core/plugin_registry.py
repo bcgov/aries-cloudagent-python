@@ -272,37 +272,48 @@ class PluginRegistry:
 
     async def load_protocols(self, context: InjectionContext, plugin: ModuleType) -> None:
         """For modules that don't implement setup, register protocols manually."""
+        plugin_name = plugin.__name__
+        LOGGER.debug("Loading protocols for plugin: %s", plugin_name)
 
         # If this module contains message_types, then assume that
         # this is a valid module of the old style (not versioned)
         try:
-            mod = ClassLoader.load_module(plugin.__name__ + ".message_types")
+            message_types_path = f"{plugin_name}.message_types"
+            LOGGER.debug("Attempting to load message types from: %s", message_types_path)
+            mod = ClassLoader.load_module(message_types_path)
         except ModuleLoadError as e:
             LOGGER.error("Error loading plugin module message types: %s", e)
             return
 
         if mod:
+            LOGGER.debug("Found non-versioned message types for: %s", plugin_name)
             await self.load_protocol_version(context, mod)
         else:
-            # Otherwise, try check for definition.py for versioned
-            # protocol packages
+            # Otherwise, try check for definition.py for versioned protocol packages
             try:
-                definition = ClassLoader.load_module(plugin.__name__ + ".definition")
+                definition_path = f"{plugin_name}.definition"
+                LOGGER.debug("Attempting to load definition from: %s", definition_path)
+                definition = ClassLoader.load_module(definition_path)
             except ModuleLoadError as e:
                 LOGGER.error("Error loading plugin definition module: %s", e)
                 return
 
             if definition:
+                LOGGER.debug("Loading versioned protocols for: %s", plugin_name)
                 for protocol_version in definition.versions:
+                    version_path = (
+                        f"{plugin_name}.{protocol_version['path']}.message_types"
+                    )
                     try:
-                        mod = ClassLoader.load_module(
-                            f"{plugin.__name__}.{protocol_version['path']}"
-                            + ".message_types"
-                        )
+                        LOGGER.debug("Loading message types from: %s", version_path)
+                        mod = ClassLoader.load_module(version_path)
                         await self.load_protocol_version(context, mod, protocol_version)
-
                     except ModuleLoadError as e:
-                        LOGGER.error("Error loading plugin module message types: %s", e)
+                        LOGGER.error(
+                            "Error loading plugin module message types from %s: %s",
+                            version_path,
+                            e,
+                        )
                         return
 
     async def register_admin_routes(self, app) -> None:
