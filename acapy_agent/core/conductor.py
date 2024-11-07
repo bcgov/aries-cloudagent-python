@@ -397,18 +397,19 @@ class Conductor:
                 their_endpoint=their_endpoint,
                 alias="test-suite",
             )
-            print("Created static connection for test suite")
-            print(" - My DID:", test_conn.my_did)
-            print(" - Their DID:", test_conn.their_did)
-            print(" - Their endpoint:", their_endpoint)
-            print()
+            LOGGER.info(
+                "Created static connection for test suite\n"
+                f" - My DID: {test_conn.my_did}\n"
+                f" - Their DID: {test_conn.their_did}\n"
+                f" - Their endpoint: {their_endpoint}\n"
+            )
             del mgr
 
         # Clear default mediator
         if context.settings.get("mediation.clear"):
             mediation_mgr = MediationManager(self.root_profile)
             await mediation_mgr.clear_default_mediator()
-            print("Default mediator cleared.")
+            LOGGER.info("Default mediator cleared.")
 
         # Clear default mediator
         # Set default mediator by id
@@ -417,7 +418,7 @@ class Conductor:
             mediation_mgr = MediationManager(self.root_profile)
             try:
                 await mediation_mgr.set_default_mediator_by_id(default_mediator_id)
-                print(f"Default mediator set to {default_mediator_id}")
+                LOGGER.info(f"Default mediator set to {default_mediator_id}")
             except Exception:
                 LOGGER.exception("Error updating default mediator")
 
@@ -436,8 +437,7 @@ class Conductor:
                 )
                 base_url = context.settings.get("invite_base_url")
                 invite_url = invi_rec.invitation.to_url(base_url)
-                print("Invitation URL:")
-                print(invite_url, flush=True)
+                LOGGER.info(f"Invitation URL:\n{invite_url}")
                 qr = QRCode(border=1)
                 qr.add_data(invite_url)
                 qr.print_ascii(invert=True)
@@ -485,7 +485,7 @@ class Conductor:
                             session, MediationManager.SET_TO_DEFAULT_ON_GRANTED, True
                         )
 
-                    print("Attempting to connect to mediator...")
+                    LOGGER.info("Attempting to connect to mediator...")
                     del mgr
             except Exception:
                 LOGGER.exception("Error accepting mediation invitation")
