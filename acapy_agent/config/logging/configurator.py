@@ -34,6 +34,8 @@ from .timed_rotating_file_multi_process_handler import (
 from .utils import add_trace_level
 
 
+LOGGER = logging.getLogger(__name__)
+
 # Add TRACE level to logging before any configuration
 add_trace_level()
 
@@ -62,7 +64,8 @@ def load_resource(path: str, encoding: Optional[str] = None):
                 return io.TextIOWrapper(bstream, encoding=encoding)
             return bstream
     except IOError:
-        pass
+        LOGGER.warning("Resource not found: %s", path)
+        return None
 
 
 def dictConfig(config, new_file_path=None):
