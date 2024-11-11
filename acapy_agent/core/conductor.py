@@ -27,6 +27,7 @@ from ..config.ledger import (
     load_multiple_genesis_transactions_from_config,
 )
 from ..config.logging import LoggingConfigurator
+from ..config.logging.utils import add_trace_level
 from ..config.provider import ClassProvider
 from ..config.wallet import wallet_config
 from ..connections.base_manager import BaseConnectionManager, BaseConnectionManagerError
@@ -79,6 +80,8 @@ from .oob_processor import OobMessageProcessor
 from .util import SHUTDOWN_EVENT_TOPIC, STARTUP_EVENT_TOPIC
 
 LOGGER = logging.getLogger(__name__)
+add_trace_level()  # Allow trace logs from this module
+
 # Refer ACA-Py issue #2197
 # When the from version is not found
 DEFAULT_ACAPY_VERSION = "v0.7.5"
