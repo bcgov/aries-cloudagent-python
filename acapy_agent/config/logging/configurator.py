@@ -103,18 +103,7 @@ def fileConfig(
             raise RuntimeError(f"{fname} is invalid: {e}")
 
     if new_file_path and cp.has_section("handler_timed_file_handler"):
-        cp.set(
-            "handler_timed_file_handler",
-            "args",
-            str(
-                (
-                    f"{new_file_path}",
-                    "d",
-                    7,
-                    1,
-                )
-            ),
-        )
+        cp.set("handler_timed_file_handler", "args", str((new_file_path, "d", 7, 1)))
 
     formatters = _create_formatters(cp)
     with logging._lock:
