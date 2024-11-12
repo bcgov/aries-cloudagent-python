@@ -344,6 +344,10 @@ class PluginRegistry:
                             "Error loading admin routes from %s: %s", version_path, e
                         )
                         continue
+
+                    if mod and hasattr(mod, "register"):
+                        LOGGER.trace("Registering routes for: %s", plugin_name)
+                        await mod.register(app)
             else:
                 # Load plugin routes that aren't in a versioned package.
                 routes_path = f"{plugin_name}.routes"
@@ -354,9 +358,9 @@ class PluginRegistry:
                     LOGGER.error("Error loading admin routes from %s: %s", routes_path, e)
                     continue
 
-            if mod and hasattr(mod, "register"):
-                LOGGER.trace("Registering routes for: %s", plugin_name)
-                await mod.register(app)
+                if mod and hasattr(mod, "register"):
+                    LOGGER.trace("Registering routes for: %s", plugin_name)
+                    await mod.register(app)
 
     def register_protocol_events(self, context: InjectionContext) -> None:
         """Call route register_events methods on the current context."""
@@ -383,6 +387,10 @@ class PluginRegistry:
                     except ModuleLoadError as e:
                         LOGGER.error("Error loading events from %s: %s", version_path, e)
                         continue
+
+                    if mod and hasattr(mod, "register_events"):
+                        LOGGER.trace("Registering events from: %s", version_path)
+                        mod.register_events(event_bus)
             else:
                 # Load plugin routes that aren't in a versioned package.
                 routes_path = f"{plugin_name}.routes"
@@ -393,9 +401,9 @@ class PluginRegistry:
                     LOGGER.error("Error loading events from %s: %s", routes_path, e)
                     continue
 
-            if mod and hasattr(mod, "register_events"):
-                LOGGER.trace("Registering events from: %s", version_path)
-                mod.register_events(event_bus)
+                if mod and hasattr(mod, "register_events"):
+                    LOGGER.trace("Registering events from: %s", version_path)
+                    mod.register_events(event_bus)
 
     def post_process_routes(self, app) -> None:
         """Call route binary file response OpenAPI fixups if applicable."""
@@ -417,6 +425,10 @@ class PluginRegistry:
                     except ModuleLoadError as e:
                         LOGGER.error("Error loading routes from %s: %s", version_path, e)
                         continue
+
+                    if mod and hasattr(mod, "post_process_routes"):
+                        LOGGER.trace("Post-processing routes for %s", plugin_name)
+                        mod.post_process_routes(app)
             else:
                 # Set binary file responses for routes not in a versioned package.
                 routes_path = f"{plugin_name}.routes"
@@ -427,9 +439,9 @@ class PluginRegistry:
                     LOGGER.error("Error loading routes from %s: %s", routes_path, e)
                     continue
 
-            if mod and hasattr(mod, "post_process_routes"):
-                LOGGER.trace("Post-processing routes for %s", plugin_name)
-                mod.post_process_routes(app)
+                if mod and hasattr(mod, "post_process_routes"):
+                    LOGGER.trace("Post-processing routes for %s", plugin_name)
+                    mod.post_process_routes(app)
 
     def __repr__(self) -> str:
         """Return a string representation for this class."""
