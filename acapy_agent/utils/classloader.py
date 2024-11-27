@@ -26,7 +26,7 @@ class ClassLoader:
     """Class used to load classes from modules dynamically."""
 
     @classmethod
-    @lru_cache
+    @lru_cache(maxsize=1024)
     def load_module(
         cls, mod_path: str, package: Optional[str] = None
     ) -> Optional[ModuleType]:
@@ -84,6 +84,7 @@ class ClassLoader:
             raise ModuleLoadError(f"Unable to import module {full_path}: {str(e)}") from e
 
     @classmethod
+    @lru_cache(maxsize=1024)
     def load_class(
         cls,
         class_name: str,
