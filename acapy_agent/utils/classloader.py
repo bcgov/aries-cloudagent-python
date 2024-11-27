@@ -3,6 +3,7 @@
 import inspect
 import logging
 import sys
+from functools import lru_cache
 from importlib import import_module, resources
 from importlib.util import find_spec, resolve_name
 from types import ModuleType
@@ -25,6 +26,7 @@ class ClassLoader:
     """Class used to load classes from modules dynamically."""
 
     @classmethod
+    @lru_cache
     def load_module(
         cls, mod_path: str, package: Optional[str] = None
     ) -> Optional[ModuleType]:
