@@ -8,11 +8,9 @@ from importlib.util import find_spec, resolve_name
 from types import ModuleType
 from typing import Optional, Sequence, Type
 
-from ..config.logging.utils import add_trace_level
 from ..core.error import BaseError
 
 LOGGER = logging.getLogger(__name__)
-add_trace_level()  # Allow trace logs from this module
 
 
 class ModuleLoadError(BaseError):
@@ -43,49 +41,53 @@ class ClassLoader:
             ModuleLoadError: If there was an error loading the module
 
         """
-        LOGGER.trace("Attempting to load module: %s with package: %s", mod_path, package)
+        LOGGER.debug(
+            "Attempting to load module: %s%s",
+            mod_path,
+            f" with package: {package}" if package else "",
+        )
 
         if package:
-            LOGGER.trace("Preloading parent package: %s", package)
+            LOGGER.debug("Preloading parent package: %s", package)
             # preload parent package
             if not cls.load_module(package):
-                LOGGER.trace("Failed to preload parent package: %s", package)
+                LOGGER.debug("Failed to preload parent package: %s", package)
                 return None
             # must treat as a relative import
             if not mod_path.startswith("."):
                 mod_path = f".{mod_path}"
-                LOGGER.trace("Adjusted mod_path for relative import: %s", mod_path)
+                LOGGER.debug("Adjusted mod_path for relative import: %s", mod_path)
 
         full_path = resolve_name(mod_path, package)
-        LOGGER.trace("Resolved full module path: %s", full_path)
+        LOGGER.debug("Resolved full module path: %s", full_path)
 
         if full_path in sys.modules:
-            LOGGER.trace("Module %s is already loaded", full_path)
+            LOGGER.debug("Module %s is already loaded", full_path)
             return sys.modules[full_path]
 
         if "." in mod_path:
             parent_mod_path, mod_name = mod_path.rsplit(".", 1)
-            LOGGER.trace(
+            LOGGER.debug(
                 "Parent module path: %s, Module name: %s", parent_mod_path, mod_name
             )
             if parent_mod_path and parent_mod_path[-1] != ".":
                 parent_mod = cls.load_module(parent_mod_path, package)
                 if not parent_mod:
-                    LOGGER.trace("Failed to load parent module: %s", parent_mod_path)
+                    LOGGER.debug("Failed to load parent module: %s", parent_mod_path)
                     return None
                 package = parent_mod.__name__
                 mod_path = f".{mod_name}"
-                LOGGER.trace("Adjusted mod_path after loading parent: %s", mod_path)
+                LOGGER.debug("Adjusted mod_path after loading parent: %s", mod_path)
 
         # Load the module spec first
-        LOGGER.trace("Finding spec for module: %s with package: %s", mod_path, package)
+        LOGGER.debug("Finding spec for module: %s with package: %s", mod_path, package)
         spec = find_spec(mod_path, package)
         if not spec:
-            LOGGER.trace("Module spec not found for: %s", mod_path)
+            LOGGER.debug("Module spec not found for: %s", mod_path)
             return None
 
         try:
-            LOGGER.trace("Importing module: %s with package: %s", mod_path, package)
+            LOGGER.debug("Importing module: %s with package: %s", mod_path, package)
             return import_module(mod_path, package)
         except ModuleNotFoundError as e:
             LOGGER.warning("Module %s not found during import", full_path)
@@ -114,7 +116,7 @@ class ClassLoader:
 
         """
 
-        LOGGER.trace(
+        LOGGER.debug(
             "Attempting to load class: %s with default_module: %s and package: %s",
             class_name,
             default_module,
@@ -124,14 +126,14 @@ class ClassLoader:
         if "." in class_name:
             # import module and find class
             mod_path, class_name = class_name.rsplit(".", 1)
-            LOGGER.trace(
+            LOGGER.debug(
                 "Extracted module path: %s, class name: %s from full class path",
                 mod_path,
                 class_name,
             )
         elif default_module:
             mod_path = default_module
-            LOGGER.trace("No module in class name, using default_module: %s", mod_path)
+            LOGGER.debug("No module in class name, using default_module: %s", mod_path)
         else:
             LOGGER.warning(
                 "Cannot resolve class name %s with no default module", class_name
@@ -160,7 +162,7 @@ class ClassLoader:
             raise ClassNotFoundError(
                 f"Resolved value is not a class: {mod_path}.{class_name}"
             )
-        LOGGER.trace("Successfully loaded class %s from module %s", class_name, mod_path)
+        LOGGER.debug("Successfully loaded class %s from module %s", class_name, mod_path)
         return resolved
 
     @classmethod
@@ -183,7 +185,7 @@ class ClassLoader:
 
         """
 
-        LOGGER.trace(
+        LOGGER.debug(
             "Attempting to load subclass of %s from module %s with package %s",
             base_class.__name__,
             mod_path,
@@ -201,7 +203,7 @@ class ClassLoader:
 
         # Find the first declared class that inherits from the base_class
         try:
-            LOGGER.trace(
+            LOGGER.debug(
                 "Inspecting classes in module %s for subclasses of %s",
                 mod_path,
                 base_class.__name__,
@@ -211,13 +213,13 @@ class ClassLoader:
                 for name, obj in inspect.getmembers(mod, inspect.isclass)
                 if issubclass(obj, base_class) and obj is not base_class
             )
-            LOGGER.trace(
+            LOGGER.debug(
                 "Found subclass %s of base class %s",
                 imported_class.__name__,
                 base_class.__name__,
             )
         except StopIteration:
-            LOGGER.trace(
+            LOGGER.debug(
                 "No subclass of %s found in module %s",
                 base_class.__name__,
                 mod_path,
@@ -233,14 +235,14 @@ class ClassLoader:
         LOGGER.debug("Scanning subpackages under package %s", package)
         if "." in package:
             package, sub_pkg = package.split(".", 1)
-            LOGGER.trace("Extracted main package: %s, sub-package: %s", package, sub_pkg)
+            LOGGER.debug("Extracted main package: %s, sub-package: %s", package, sub_pkg)
         else:
             sub_pkg = "."
-            LOGGER.trace("No sub-package provided, defaulting to %s", sub_pkg)
+            LOGGER.debug("No sub-package provided, defaulting to %s", sub_pkg)
 
         try:
             package_path = resources.files(package)
-            LOGGER.trace("Found package path: %s", package_path)
+            LOGGER.debug("Found package path: %s", package_path)
         except FileNotFoundError:
             LOGGER.warning("Package %s not found during subpackage scan", package)
             raise ModuleLoadError(f"Undefined package {package}")
@@ -252,12 +254,10 @@ class ClassLoader:
         found = []
         joiner = "" if sub_pkg == "." else f"{sub_pkg}."
         sub_path = package_path / sub_pkg
-        LOGGER.trace("Iterating over items in sub-package path: %s", sub_path)
         for item in sub_path.iterdir():
             if (item / "__init__.py").exists():
                 subpackage = f"{package}.{joiner}{item.name}"
                 found.append(subpackage)
-                LOGGER.trace("Found sub-package: %s", subpackage)
         LOGGER.debug("Total sub-packages found under %s: %s", package, found)
         return found
 
