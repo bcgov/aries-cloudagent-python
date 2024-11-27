@@ -119,10 +119,10 @@ class ClassLoader:
         """
 
         LOGGER.debug(
-            "Attempting to load class: %s with default_module: %s and package: %s",
+            "Attempting to load class: %s%s%s",
             class_name,
-            default_module,
-            package,
+            f", with default_module: {default_module}" if default_module else "",
+            f", with package: {package}" if package else "",
         )
 
         if "." in class_name:
