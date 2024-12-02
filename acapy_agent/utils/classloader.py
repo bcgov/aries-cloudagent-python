@@ -41,11 +41,6 @@ class ClassLoader:
             ModuleLoadError: If there was an error loading the module
 
         """
-        LOGGER.debug(
-            "Attempting to load module: %s%s",
-            mod_path,
-            f" with package: {package}" if package else "",
-        )
 
         if package:
             # preload parent package
@@ -75,7 +70,6 @@ class ClassLoader:
             return None
 
         try:
-            LOGGER.debug("Importing package: %s, module: %s", package, mod_path)
             return import_module(mod_path, package)
         except ModuleNotFoundError as e:
             LOGGER.warning("Module %s not found during import", full_path)
@@ -103,13 +97,6 @@ class ClassLoader:
             ModuleLoadError: If there was an error loading the module
 
         """
-
-        LOGGER.debug(
-            "Attempting to load class: %s%s%s",
-            class_name,
-            f", with default_module: {default_module}" if default_module else "",
-            f", with package: {package}" if package else "",
-        )
 
         if "." in class_name:
             # import module and find class
@@ -223,7 +210,7 @@ class ClassLoader:
             if (item / "__init__.py").exists():
                 subpackage = f"{package}.{joiner}{item.name}"
                 found.append(subpackage)
-        LOGGER.debug("Total sub-packages found under %s: %s", package, found)
+        LOGGER.debug("%d sub-packages found under %s: %s", len(found), package, found)
         return found
 
 
