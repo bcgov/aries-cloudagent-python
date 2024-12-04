@@ -671,21 +671,18 @@ class Conductor:
         """Handle completion of message dispatch."""
         if completed.exc_info:
             LOGGER.exception("Exception in message handler:", exc_info=completed.exc_info)
-            if isinstance(completed.exc_info[1], LedgerConfigError) or isinstance(
-                completed.exc_info[1], LedgerTransactionError
-            ):
+            exc_class, exc, _ = completed.exc_info
+            if isinstance(exc, (LedgerConfigError, LedgerTransactionError)):
                 LOGGER.error(
                     "%shutdown on ledger error %s",
                     "S" if self.admin_server else "No admin server to s",
-                    str(completed.exc_info[1]),
+                    str(exc),
                 )
                 if self.admin_server:
                     self.admin_server.notify_fatal_error()
             else:
                 LOGGER.error(
-                    "DON'T shutdown on %s %s",
-                    completed.exc_info[0].__name__,
-                    str(completed.exc_info[1]),
+                    "DON'T shutdown on %s %s", exc_class.__name__, str(exc)
                 )
         self.inbound_transport_manager.dispatch_complete(message, completed)
 
