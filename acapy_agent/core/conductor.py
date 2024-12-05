@@ -673,10 +673,11 @@ class Conductor:
         if completed.exc_info:
             exc_class, exc, _ = completed.exc_info
             if isinstance(exc, (LedgerConfigError, LedgerTransactionError)):
-                LOGGER.error(
+                LOGGER.fatal(
                     "%shutdown on ledger error %s",
                     "S" if self.admin_server else "No admin server to s",
                     str(exc),
+                    exc_info=completed.exc_info,
                 )
                 if self.admin_server:
                     self.admin_server.notify_fatal_error()
