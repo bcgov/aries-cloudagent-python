@@ -13,6 +13,7 @@ import json
 import logging
 from typing import Optional
 
+from aries_askar import AskarError
 from packaging import version as package_version
 from qrcode import QRCode
 
@@ -670,7 +671,6 @@ class Conductor:
     def dispatch_complete(self, message: InboundMessage, completed: CompletedTask):
         """Handle completion of message dispatch."""
         if completed.exc_info:
-            LOGGER.exception("Exception in message handler:", exc_info=completed.exc_info)
             exc_class, exc, _ = completed.exc_info
             if isinstance(exc, (LedgerConfigError, LedgerTransactionError)):
                 LOGGER.error(
@@ -680,9 +680,16 @@ class Conductor:
                 )
                 if self.admin_server:
                     self.admin_server.notify_fatal_error()
+            elif isinstance(exc, (AskarError, StorageNotFoundError)):
+                LOGGER.warning(
+                    "Storage error occurred in message handler: %s: %s",
+                    exc_class.__name__,
+                    str(exc),
+                    exc_info=completed.exc_info,
+                )
             else:
-                LOGGER.error(
-                    "DON'T shutdown on %s %s", exc_class.__name__, str(exc)
+                LOGGER.exception(
+                    "Exception in message handler:", exc_info=completed.exc_info
                 )
         self.inbound_transport_manager.dispatch_complete(message, completed)
 
