@@ -13,7 +13,6 @@ import json
 import logging
 from typing import Optional
 
-from aries_askar import AskarError
 from packaging import version as package_version
 from qrcode import QRCode
 
@@ -75,7 +74,7 @@ from ..version import RECORD_TYPE_ACAPY_VERSION, __version__
 from ..wallet.anoncreds_upgrade import upgrade_wallet_to_anoncreds_if_requested
 from ..wallet.did_info import DIDInfo
 from .dispatcher import Dispatcher
-from .error import StartupError
+from .error import ProfileError, StartupError
 from .oob_processor import OobMessageProcessor
 from .util import SHUTDOWN_EVENT_TOPIC, STARTUP_EVENT_TOPIC
 
@@ -681,7 +680,7 @@ class Conductor:
                 )
                 if self.admin_server:
                     self.admin_server.notify_fatal_error()
-            elif isinstance(exc, (AskarError, StorageNotFoundError)):
+            elif isinstance(exc, (ProfileError, StorageNotFoundError)):
                 LOGGER.warning(
                     "Storage error occurred in message handler: %s: %s",
                     exc_class.__name__,
