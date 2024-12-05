@@ -176,9 +176,6 @@ class Dispatcher:
             inbound_message: The inbound message instance
             send_outbound: Async function to send outbound messages
 
-        # Raises:
-        #     MessageParseError: If the message type version is not supported
-
         Returns:
             The response from the handler
 
@@ -193,7 +190,9 @@ class Dispatcher:
         except ProblemReportParseError:
             pass  # avoid problem report recursion
         except MessageParseError as e:
-            self.logger.error(f"Message parsing failed: {str(e)}, sending problem report")
+            self.logger.error(
+                f"Message parsing failed: {str(e)}, sending problem report", exc_info=e
+            )
             error_result = ProblemReport(
                 description={
                     "en": str(e),
