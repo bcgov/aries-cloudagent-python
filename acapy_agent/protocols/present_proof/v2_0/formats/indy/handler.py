@@ -287,12 +287,12 @@ class IndyPresExchangeHandler(V20PresFormatHandler):
                     "primary_proof"
                 ]["ge_proofs"]:
                     proof_pred_spec = ge_proof["predicate"]
-                    if proof_pred_spec["attr_name"] != canon(req_name):
-                        continue
                     if not (
-                        Predicate.get(proof_pred_spec["p_type"]) is req_pred
-                        and proof_pred_spec["value"] == req_value
+                        proof_pred_spec["attr_name"] == canon(req_name)
+                        and Predicate.get(proof_pred_spec["p_type"]) is req_pred
                     ):
+                        continue
+                    if proof_pred_spec["value"] != req_value:
                         raise V20PresFormatHandlerError(
                             f"Presentation predicate on {req_name} "
                             "mismatches proposal request"
