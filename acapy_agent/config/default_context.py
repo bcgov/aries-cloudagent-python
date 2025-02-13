@@ -151,6 +151,9 @@ class DefaultContextBuilder(ContextBuilder):
         plugin_registry.register_plugin("acapy_agent.wallet")
         plugin_registry.register_plugin("acapy_agent.wallet.keys")
 
+        # Did management plugins
+        plugin_registry.register_plugin("acapy_agent.did.indy")
+
         anoncreds_plugins = [
             "acapy_agent.anoncreds",
             "acapy_agent.anoncreds.default.did_indy",

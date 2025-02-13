@@ -18,6 +18,8 @@ from ..protocols.endorse_transaction.v1_0.util import (
     is_author_role,
 )
 from ..storage.base import StorageNotFoundError
+from ..wallet.askar import CATEGORY_DID
+from ..wallet.error import WalletNotFoundError
 from .error import (
     RevocationError,
     RevocationInvalidStateValueError,
@@ -79,11 +81,20 @@ class IndyRevocation:
 
         record_id = str(uuid4())
         issuer_did = cred_def_id.split(":")[0]
+        # Try and get a did:indy did from nym value stored as a did
+        async with self._profile.session() as session:
+            try:
+                indy_did = await session.handle.fetch(
+                    CATEGORY_DID, f"did:indy:{issuer_did}"
+                )
+            except WalletNotFoundError:
+                indy_did = None
+
         record = IssuerRevRegRecord(
             new_with_id=True,
             record_id=record_id,
             cred_def_id=cred_def_id,
-            issuer_did=issuer_did,
+            issuer_did=indy_did.name if indy_did else issuer_did,
             max_cred_num=max_cred_num,
             revoc_def_type=revoc_def_type,
             tag=tag,

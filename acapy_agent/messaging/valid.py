@@ -350,8 +350,8 @@ class DIDPosture(OneOf):
 class IndyDID(Regexp):
     """Validate value against indy DID."""
 
-    EXAMPLE = "WgWxqztrNooG92RXvxSTWv"
-    PATTERN = re.compile(rf"^(did:sov:)?[{B58}]{{21,22}}$")
+    EXAMPLE = "did:indy:sovrin:WRfXPg8dantKVubE3HX8pw"
+    PATTERN = re.compile(rf"^(did:(sov|indy):)?[{B58}]{{21,22}}$")
 
     def __init__(self):
         """Initialize the instance."""

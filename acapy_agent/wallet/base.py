@@ -214,7 +214,7 @@ class BaseWallet(ABC):
         return await self.set_public_did(did_info)
 
     @abstractmethod
-    async def get_public_did(self) -> DIDInfo:
+    async def get_public_did(self) -> DIDInfo | None:
         """Retrieve the public DID.
 
         Returns:

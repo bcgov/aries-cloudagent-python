@@ -71,6 +71,7 @@ from .anoncreds_upgrade import (
 from .base import BaseWallet
 from .did_info import DIDInfo
 from .did_method import (
+    INDY,
     KEY,
     PEER2,
     PEER4,
@@ -586,6 +587,12 @@ async def wallet_create_did(request: web.BaseRequest):
         if not method:
             raise web.HTTPForbidden(
                 reason=f"method {body.get('method')} is not supported by the agent."
+            )
+
+        # Don't support Indy DID method from this endpoint
+        if method.method_name == INDY.method_name:
+            raise web.HTTPBadRequest(
+                reason="Indy did method is supported from /did/indy/create endpoint."
             )
 
         key_types = session.inject(KeyTypes)

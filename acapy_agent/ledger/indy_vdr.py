@@ -21,6 +21,7 @@ from ..messaging.valid import IndyDID
 from ..storage.base import BaseStorage, StorageRecord
 from ..utils import sentinel
 from ..utils.env import storage_path
+from ..utils.general import strip_did_prefix
 from ..wallet.base import BaseWallet, DIDInfo
 from ..wallet.did_posture import DIDPosture
 from ..wallet.error import WalletNotFoundError
@@ -379,7 +380,9 @@ class IndyVdrLedger(BaseLedger):
     ):
         """Create the ledger request for publishing a schema."""
         try:
-            schema_req = ledger.build_schema_request(public_info.did, schema_json)
+            schema_req = ledger.build_schema_request(
+                strip_did_prefix(public_info.did), schema_json
+            )
         except VdrError as err:
             raise LedgerError("Exception when building schema request") from err
 
@@ -462,7 +465,9 @@ class IndyVdrLedger(BaseLedger):
         public_did = public_info.did if public_info else None
 
         try:
-            schema_req = ledger.build_get_schema_request(public_did, schema_id)
+            schema_req = ledger.build_get_schema_request(
+                strip_did_prefix(public_did), strip_did_prefix(schema_id)
+            )
         except VdrError as err:
             raise LedgerError("Exception when building get-schema request") from err
 
@@ -568,7 +573,9 @@ class IndyVdrLedger(BaseLedger):
 
         return await self.fetch_credential_definition(credential_definition_id)
 
-    async def fetch_credential_definition(self, credential_definition_id: str) -> dict:
+    async def fetch_credential_definition(
+        self, credential_definition_id: str
+    ) -> dict | None:
         """Get a credential definition from the ledger by id.
 
         Args:
@@ -581,7 +588,7 @@ class IndyVdrLedger(BaseLedger):
 
         try:
             cred_def_req = ledger.build_get_cred_def_request(
-                public_did, credential_definition_id
+                strip_did_prefix(public_did), strip_did_prefix(credential_definition_id)
             )
         except VdrError as err:
             raise LedgerError("Exception when building get-cred-def request") from err
@@ -630,7 +637,7 @@ class IndyVdrLedger(BaseLedger):
         Args:
             did: The DID to look up on the ledger or in the cache
         """
-        nym = self.did_to_nym(did)
+        nym = strip_did_prefix(did)
         public_info = await self.get_wallet_public_did()
         public_did = public_info.did if public_info else None
 
@@ -653,7 +660,7 @@ class IndyVdrLedger(BaseLedger):
         Args:
             did: The DID to look up on the ledger or in the cache
         """
-        nym = self.did_to_nym(did)
+        nym = strip_did_prefix(did)
         public_info = await self.get_wallet_public_did()
         public_did = public_info.did if public_info else None
         try:
@@ -685,7 +692,7 @@ class IndyVdrLedger(BaseLedger):
 
         if not endpoint_type:
             endpoint_type = EndpointType.ENDPOINT
-        nym = self.did_to_nym(did)
+        nym = strip_did_prefix(did)
         public_info = await self.get_wallet_public_did()
         public_did = public_info.did if public_info else None
         try:
@@ -749,7 +756,7 @@ class IndyVdrLedger(BaseLedger):
                     "Error cannot update endpoint when ledger is in read only mode"
                 )
 
-            nym = self.did_to_nym(did)
+            nym = strip_did_prefix(did)
 
             attr_json = await self._construct_attr_json(
                 endpoint, endpoint_type, all_exist_endpoints, routing_keys
@@ -853,7 +860,7 @@ class IndyVdrLedger(BaseLedger):
         """Format a nym with the ledger's DID prefix."""
         if nym:
             # remove any existing prefix
-            nym = self.did_to_nym(nym)
+            nym = strip_did_prefix(nym)
             return f"did:sov:{nym}"
 
     async def build_and_return_get_nym_request(
@@ -887,7 +894,7 @@ class IndyVdrLedger(BaseLedger):
             await txn.commit()
 
         # fetch current nym info from ledger
-        nym = self.did_to_nym(public_did)
+        nym = strip_did_prefix(public_did)
         try:
             get_nym_req = ledger.build_get_nym_request(public_did, nym)
         except VdrError as err:

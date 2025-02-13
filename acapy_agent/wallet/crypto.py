@@ -1,5 +1,6 @@
 """Cryptography functions used by BasicWallet."""
 
+import hashlib
 import re
 from collections import OrderedDict
 from typing import Callable, List, Optional, Sequence, Tuple, Union
@@ -16,6 +17,7 @@ from .bbs import (
     sign_messages_bls12381g2,
     verify_signed_messages_bls12381g2,
 )
+from .did_method import INDY, SOV, DIDMethod
 from .error import WalletError
 from .key_type import BLS12381G2, ED25519, KeyType
 from .util import b58_to_bytes, b64_to_bytes, bytes_to_b58, random_seed
@@ -63,11 +65,12 @@ def create_ed25519_keypair(seed: Optional[bytes] = None) -> Tuple[bytes, bytes]:
     return pk, sk
 
 
-def seed_to_did(seed: str) -> str:
+def seed_to_did(seed: str, method: Optional[DIDMethod] = SOV) -> str:
     """Derive a DID from a seed value.
 
     Args:
         seed: The seed to derive
+        method: The DID method to use
 
     Returns:
         The DID derived from the seed
@@ -75,8 +78,14 @@ def seed_to_did(seed: str) -> str:
     """
     seed = validate_seed(seed)
     verkey, _ = create_ed25519_keypair(seed)
-    did = bytes_to_b58(verkey[:16])
-    return did
+    if method == SOV:
+        return bytes_to_b58(verkey[:16])
+    if method == INDY:
+        # Hash the verkey, take the first 16 bytes, and convert to a base58 string
+        hashed_verkey = hashlib.sha256(verkey).digest()
+        did = bytes_to_b58(hashed_verkey[:16])
+        return f"did:indy:{did}"
+    raise WalletError(f"Unsupported DID method: {method.method_name}")
 
 
 def did_is_self_certified(did: str, verkey: str) -> bool:

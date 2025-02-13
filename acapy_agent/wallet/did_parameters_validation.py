@@ -1,9 +1,11 @@
 """Tooling to validate DID creation parameters."""
 
+import hashlib
 from typing import Optional
 
 from acapy_agent.did.did_key import DIDKey
 from acapy_agent.wallet.did_method import (
+    INDY,
     KEY,
     SOV,
     DIDMethod,
@@ -60,5 +62,7 @@ class DIDParametersValidation:
             return DIDKey.from_public_key(verkey, key_type).did
         elif method == SOV:
             return bytes_to_b58(verkey[:16]) if not did else did
+        elif method == INDY:
+            return bytes_to_b58(hashlib.sha256(verkey).digest()[:16]) if not did else did
 
         return did

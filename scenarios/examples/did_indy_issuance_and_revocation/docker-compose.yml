@@ -1,0 +1,89 @@
+ services:
+  alice:
+    image: acapy-test
+    ports:
+      - "3001:3001"
+    command: >
+      start
+        --label Alice
+        --inbound-transport http 0.0.0.0 3000
+        --outbound-transport http
+        --endpoint http://alice:3000
+        --admin 0.0.0.0 3001
+        --admin-insecure-mode
+        --tails-server-base-url http://tails:6543
+        --genesis-url http://test.bcovrin.vonx.io/genesis
+        --wallet-type askar
+        --wallet-name alice
+        --wallet-key insecure
+        --auto-provision
+        --log-level info
+        --debug-webhooks
+        --notify-revocation
+    healthcheck:
+      test: curl -s -o /dev/null -w '%{http_code}' "http://localhost:3001/status/live" | grep "200" > /dev/null
+      start_period: 30s
+      interval: 7s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      tails:
+        condition: service_started
+
+  bob:
+    image: acapy-test
+    ports:
+      - "3002:3001"
+    command: >
+      start
+        --label Bob
+        --inbound-transport http 0.0.0.0 3000
+        --outbound-transport http
+        --endpoint http://bob:3000
+        --admin 0.0.0.0 3001
+        --admin-insecure-mode
+        --tails-server-base-url http://tails:6543
+        --genesis-url http://test.bcovrin.vonx.io/genesis
+        --wallet-type askar
+        --wallet-name bob
+        --wallet-key insecure
+        --auto-provision
+        --log-level info
+        --debug-webhooks
+        --monitor-revocation-notification
+    healthcheck:
+      test: curl -s -o /dev/null -w '%{http_code}' "http://localhost:3001/status/live" | grep "200" > /dev/null
+      start_period: 30s
+      interval: 7s
+      timeout: 5s
+      retries: 5
+
+  example:
+    container_name: controller
+    build:
+      context: ../..
+    environment:
+      - ALICE=http://alice:3001
+      - BOB=http://bob:3001
+    volumes:
+      - ./example.py:/usr/src/app/example.py:ro,z
+    command: python -m example
+    depends_on:
+      alice:
+        condition: service_healthy
+      bob:
+        condition: service_healthy
+
+  tails:
+    image: ghcr.io/bcgov/tails-server:latest
+    ports:
+      - 6543:6543
+    environment:
+      - GENESIS_URL=http://test.bcovrin.vonx.io/genesis
+    command: >
+      tails-server
+      --host 0.0.0.0
+      --port 6543
+      --storage-path /tmp/tails-files
+      --log-level INFO
+

@@ -1,5 +1,6 @@
 from unittest import IsolatedAsyncioTestCase
 
+from ...core.error import StartupError
 from ...core.profile import ProfileManager, ProfileSession
 from ...storage.base import BaseStorage
 from ...storage.record import StorageRecord
@@ -149,7 +150,7 @@ class TestWalletConfig(IsolatedAsyncioTestCase):
         ):
             mock_mgr_open.side_effect = test_module.ProfileNotFoundError()
 
-            with self.assertRaises(test_module.ProfileNotFoundError):
+            with self.assertRaises(StartupError):
                 await test_module.wallet_config(self.context, provision=False)
 
             self.context.update_settings({"auto_provision": True})

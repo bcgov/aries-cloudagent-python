@@ -167,6 +167,13 @@ class TestWalletRoutes(IsolatedAsyncioTestCase):
         with self.assertRaises(test_module.web.HTTPForbidden):
             await test_module.wallet_create_did(self.request)
 
+    async def test_create_did_indy(self):
+        self.request.json = mock.CoroutineMock(
+            return_value={"method": "indy", "options": {"key_type": ED25519.key_type}}
+        )
+        with self.assertRaises(test_module.web.HTTPBadRequest):
+            await test_module.wallet_create_did(self.request)
+
     async def test_create_did_method_requires_user_defined_did(self):
         # given
         did_custom = DIDMethod(

@@ -19,6 +19,7 @@ from indy_credx import (
 )
 
 from ...askar.profile import AskarProfile
+from ...utils.general import strip_did_prefix
 from ..issuer import (
     DEFAULT_CRED_DEF_TAG,
     DEFAULT_SIGNATURE_TYPE,
@@ -78,7 +79,10 @@ class IndyCredxIssuer(IndyIssuer):
         """
         try:
             schema = Schema.create(
-                origin_did, schema_name, schema_version, attribute_names
+                strip_did_prefix(origin_did),
+                schema_name,
+                schema_version,
+                attribute_names,
             )
             schema_id = schema.id
             schema_json = schema.to_json()
@@ -143,7 +147,7 @@ class IndyCredxIssuer(IndyIssuer):
             ) = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: CredentialDefinition.create(
-                    origin_did,
+                    strip_did_prefix(origin_did),
                     schema,
                     signature_type or DEFAULT_SIGNATURE_TYPE,
                     tag or DEFAULT_CRED_DEF_TAG,
@@ -597,7 +601,7 @@ class IndyCredxIssuer(IndyIssuer):
             ) = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: RevocationRegistryDefinition.create(
-                    origin_did,
+                    strip_did_prefix(origin_did),
                     cred_def.raw_value,
                     tag,
                     revoc_def_type,

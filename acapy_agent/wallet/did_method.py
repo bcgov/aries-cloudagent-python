@@ -65,6 +65,12 @@ SOV = DIDMethod(
     rotation=True,
     holder_defined_did=HolderDefinedDid.ALLOWED,
 )
+INDY = DIDMethod(
+    name="indy",
+    key_types=[ED25519],
+    rotation=True,
+    holder_defined_did=HolderDefinedDid.ALLOWED,
+)
 KEY = DIDMethod(
     name="key",
     key_types=[ED25519, P256, BLS12381G2],
@@ -105,6 +111,7 @@ class DIDMethods:
         """Construct did method registry."""
         self._registry: Dict[str, DIDMethod] = {
             SOV.method_name: SOV,
+            INDY.method_name: INDY,
             KEY.method_name: KEY,
             WEB.method_name: WEB,
             PEER2.method_name: PEER2,
