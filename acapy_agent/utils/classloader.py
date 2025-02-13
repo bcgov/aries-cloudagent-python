@@ -103,7 +103,6 @@ class ClassLoader:
             mod_path, class_name = class_name.rsplit(".", 1)
         elif default_module:
             mod_path = default_module
-            LOGGER.debug("No module in class name, using default_module: %s", mod_path)
         else:
             LOGGER.warning(
                 "Cannot resolve class name %s with no default module", class_name
