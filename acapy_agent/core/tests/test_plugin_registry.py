@@ -11,6 +11,7 @@ from ..error import ProtocolDefinitionValidationError
 from ..goal_code_registry import GoalCodeRegistry
 from ..plugin_registry import PluginRegistry
 from ..protocol_registry import ProtocolRegistry
+from ...didcomm_v2.protocol_registry import V2ProtocolRegistry
 
 
 class TestPluginRegistry(IsolatedAsyncioTestCase):
@@ -27,6 +28,7 @@ class TestPluginRegistry(IsolatedAsyncioTestCase):
             register_controllers=mock.MagicMock(),
         )
         self.context.injector.bind_instance(ProtocolRegistry, self.proto_registry)
+        self.context.injector.bind_instance(V2ProtocolRegistry, V2ProtocolRegistry())
         self.context.injector.bind_instance(GoalCodeRegistry, self.goal_code_registry)
 
     async def test_setup(self):

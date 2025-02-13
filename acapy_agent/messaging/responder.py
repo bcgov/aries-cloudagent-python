@@ -45,11 +45,14 @@ class BaseResponder(ABC):
         connection_id: Optional[str] = None,
         reply_session_id: Optional[str] = None,
         reply_to_verkey: Optional[str] = None,
+        target: Optional[ConnectionTarget] = None,
+        target_list: Sequence[ConnectionTarget] = None,
     ):
         """Initialize a base responder."""
         self.connection_id = connection_id
         self.reply_session_id = reply_session_id
         self.reply_to_verkey = reply_to_verkey
+        self.target_list = target_list
 
     async def create_outbound(
         self,
@@ -133,7 +136,7 @@ class BaseResponder(ABC):
             reply_session_id=self.reply_session_id,
             reply_to_verkey=self.reply_to_verkey,
             target=target,
-            target_list=target_list,
+            target_list=target_list or self.target_list,
         )
         if isinstance(message, BaseMessage):
             msg_type = message._message_type

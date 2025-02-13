@@ -15,6 +15,7 @@ from ...config.injection_context import InjectionContext
 from ...core.event_bus import Event
 from ...core.goal_code_registry import GoalCodeRegistry
 from ...core.protocol_registry import ProtocolRegistry
+from ...didcomm_v2.protocol_registry import V2ProtocolRegistry
 from ...multitenant.error import MultitenantManagerError
 from ...storage.base import BaseStorage
 from ...storage.error import StorageNotFoundError
@@ -339,6 +340,7 @@ class TestAdminServer(IsolatedAsyncioTestCase):
         # for routes with associated tests, this shouldn't make a difference in coverage
         context = InjectionContext()
         context.injector.bind_instance(ProtocolRegistry, ProtocolRegistry())
+        context.injector.bind_instance(V2ProtocolRegistry, V2ProtocolRegistry())
         context.injector.bind_instance(GoalCodeRegistry, GoalCodeRegistry())
         await DefaultContextBuilder().load_plugins(context)
         server = await self.get_admin_server({"admin.admin_insecure_mode": True}, context)
@@ -347,6 +349,7 @@ class TestAdminServer(IsolatedAsyncioTestCase):
     async def test_register_external_plugin_x(self):
         context = InjectionContext()
         context.injector.bind_instance(ProtocolRegistry, ProtocolRegistry())
+        context.injector.bind_instance(V2ProtocolRegistry, V2ProtocolRegistry())
         context.injector.bind_instance(GoalCodeRegistry, GoalCodeRegistry())
         with self.assertLogs(level="ERROR") as logs:
             builder = DefaultContextBuilder(
