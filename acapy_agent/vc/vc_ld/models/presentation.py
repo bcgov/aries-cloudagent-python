@@ -16,6 +16,7 @@ from ....messaging.valid import (
 )
 from ...ld_proofs.constants import (
     CREDENTIALS_CONTEXT_V1_URL,
+    CREDENTIALS_CONTEXT_V2_URL,
     VERIFIABLE_PRESENTATION_TYPE,
 )
 from .linked_data_proof import LDProof, LinkedDataProofSchema
@@ -61,7 +62,7 @@ class VerifiablePresentation(BaseModel):
 
         First item must be credentials v1 url
         """
-        assert context[0] == CREDENTIALS_CONTEXT_V1_URL
+        assert context[0] in [CREDENTIALS_CONTEXT_V1_URL, CREDENTIALS_CONTEXT_V2_URL]
 
         self._context = context
 

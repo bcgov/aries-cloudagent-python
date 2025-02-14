@@ -26,6 +26,7 @@ from ....messaging.valid import (
 )
 from ...ld_proofs.constants import (
     CREDENTIALS_CONTEXT_V1_URL,
+    CREDENTIALS_CONTEXT_V2_URL,
     VERIFIABLE_CREDENTIAL_TYPE,
 )
 from .linked_data_proof import LDProof, LinkedDataProofSchema
@@ -47,6 +48,8 @@ class VerifiableCredential(BaseModel):
         issuer: Optional[Union[dict, str]] = None,
         issuance_date: Optional[str] = None,
         expiration_date: Optional[str] = None,
+        valid_from: Optional[str] = None,
+        valid_until: Optional[str] = None,
         credential_subject: Optional[Union[dict, List[dict]]] = None,
         credential_status: Optional[Union[dict, List[dict]]] = None,
         proof: Optional[Union[dict, LDProof]] = None,
@@ -63,6 +66,8 @@ class VerifiableCredential(BaseModel):
         # TODO: proper date parsing
         self._issuance_date = issuance_date
         self._expiration_date = expiration_date
+        self._valid_from = valid_from
+        self._valid_until = valid_until
 
         self._proof = proof
 
@@ -79,7 +84,7 @@ class VerifiableCredential(BaseModel):
 
         First item must be credentials v1 url
         """
-        assert context[0] == CREDENTIALS_CONTEXT_V1_URL
+        assert context[0] in [CREDENTIALS_CONTEXT_V1_URL, CREDENTIALS_CONTEXT_V2_URL]
 
         self._context = context
 
@@ -196,6 +201,36 @@ class VerifiableCredential(BaseModel):
         self._expiration_date = date
 
     @property
+    def valid_from(self):
+        """Getter for valid from date."""
+        return self._valid_from
+
+    @valid_from.setter
+    def valid_from(self, date: Union[str, datetime]):
+        """Setter for valid from date."""
+        if isinstance(date, datetime):
+            if not date.tzinfo:
+                date = date.replace(tzinfo=tz.UTC)
+            date = date.isoformat()
+
+        self._valid_from = date
+
+    @property
+    def valid_until(self):
+        """Getter for valid until date."""
+        return self._valid_until
+
+    @valid_until.setter
+    def valid_until(self, date: Union[str, datetime, None]):
+        """Setter for valid until date."""
+        if isinstance(date, datetime):
+            if not date.tzinfo:
+                date = date.replace(tzinfo=tz.UTC)
+            date = date.isoformat()
+
+        self._valid_until = date
+
+    @property
     def credential_subject_ids(self) -> List[str]:
         """Getter for credential subject ids."""
         if not self._credential_subject:
@@ -260,6 +295,8 @@ class VerifiableCredential(BaseModel):
                 and self.issuer == o.issuer
                 and self.issuance_date == o.issuance_date
                 and self.expiration_date == o.expiration_date
+                and self.valid_from == o.valid_from
+                and self.valid_until == o.valid_until
                 and self.credential_subject == o.credential_subject
                 and self.credential_status == o.credential_status
                 and self.proof == o.proof
@@ -325,7 +362,7 @@ class CredentialSchema(BaseModelSchema):
 
     issuance_date = fields.Str(
         data_key="issuanceDate",
-        required=True,
+        required=False,
         validate=RFC3339_DATETIME_VALIDATE,
         metadata={
             "description": "The issuance date",
@@ -339,6 +376,26 @@ class CredentialSchema(BaseModelSchema):
         validate=RFC3339_DATETIME_VALIDATE,
         metadata={
             "description": "The expiration date",
+            "example": RFC3339_DATETIME_EXAMPLE,
+        },
+    )
+
+    valid_from = fields.Str(
+        data_key="validFrom",
+        required=False,
+        validate=RFC3339_DATETIME_VALIDATE,
+        metadata={
+            "description": "The valid from date",
+            "example": RFC3339_DATETIME_EXAMPLE,
+        },
+    )
+
+    valid_until = fields.Str(
+        data_key="validUntil",
+        required=False,
+        validate=RFC3339_DATETIME_VALIDATE,
+        metadata={
+            "description": "The valid until date",
             "example": RFC3339_DATETIME_EXAMPLE,
         },
     )

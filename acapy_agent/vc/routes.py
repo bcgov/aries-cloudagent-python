@@ -194,21 +194,9 @@ async def prove_presentation_route(request: web.BaseRequest):
         presentation = body["presentation"]
         options = {} if "options" not in body else body["options"]
 
-        # We derive the proofType from the holder DID if not provided in options
+        # Default proof Type
         if not options.get("proofType", None):
-            holder = presentation["holder"]
-            did = holder if isinstance(holder, str) else holder["id"]
-            async with context.session() as session:
-                wallet: BaseWallet | None = session.inject_or(BaseWallet)
-                info = await wallet.get_local_did(did)
-                key_type = info.key_type.key_type
-
-            if key_type == "ed25519":
-                options["proofType"] = "Ed25519Signature2020"
-            elif key_type == "bls12381g2":
-                options["proofType"] = "BbsBlsSignature2020"
-            elif key_type == "p256":
-                options["proofType"] = "EcdsaSecp256r1Signature2019"
+            options["proofType"] = "Ed25519Signature2020"
 
         presentation = VerifiablePresentation.deserialize(presentation)
         options = LDProofVCOptions.deserialize(options)

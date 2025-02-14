@@ -40,6 +40,7 @@ class StaticCacheJsonLdDownloader:
 
     CONTEXT_FILE_MAPPING = {
         "https://www.w3.org/2018/credentials/v1": "credentials_context.jsonld",
+        "https://www.w3.org/ns/credentials/v2": "credentials_v2_context.jsonld",
         "https://w3id.org/vc/status-list/2021/v1": "status_list_context.jsonld",
         "https://www.w3.org/ns/did/v1": "did_documents_context.jsonld",
         "https://w3id.org/security/v1": "security-v1-context.jsonld",

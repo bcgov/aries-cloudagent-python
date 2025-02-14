@@ -898,7 +898,11 @@ class CredentialContext(Validator):
     """Credential Context."""
 
     FIRST_CONTEXT = "https://www.w3.org/2018/credentials/v1"
-    EXAMPLE = [FIRST_CONTEXT, "https://www.w3.org/2018/credentials/examples/v1"]
+    VALID_CONTEXTS = [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://www.w3.org/ns/credentials/v2",
+    ]
+    EXAMPLE = [VALID_CONTEXTS[0], "https://www.w3.org/2018/credentials/examples/v1"]
 
     def __init__(self) -> None:
         """Initialize the instance."""
@@ -906,11 +910,13 @@ class CredentialContext(Validator):
 
     def __call__(self, value):
         """Validate input value."""
-        length = len(value)
 
-        if length < 1 or value[0] != CredentialContext.FIRST_CONTEXT:
+        if not isinstance(value, list):
+            raise ValidationError("Value must be a non-empty list.")
+
+        if not value or value[0] not in CredentialContext.VALID_CONTEXTS:
             raise ValidationError(
-                f"First context must be {CredentialContext.FIRST_CONTEXT}"
+                f"First context must be one of {CredentialContext.VALID_CONTEXTS}"
             )
 
         return value
