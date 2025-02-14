@@ -865,7 +865,12 @@ async def credential_exchange_send(request: web.BaseRequest):
         V20CredManagerError,
         V20CredFormatError,
     ) as err:
-        LOGGER.exception("Error preparing credential offer")
+        # Only log full exception for unexpected errors
+        if isinstance(err, (V20CredFormatError, V20CredManagerError)):
+            LOGGER.warning(f"Error preparing credential offer: {err.roll_up}")
+        else:
+            LOGGER.exception("Error preparing credential offer")
+
         if cred_ex_record:
             async with profile.session() as session:
                 await cred_ex_record.save_error_state(session, reason=err.roll_up)

@@ -32,6 +32,8 @@ from .timed_rotating_file_multi_process_handler import (
     TimedRotatingFileMultiProcessHandler,
 )
 
+LOGGER = logging.getLogger(__name__)
+
 
 def load_resource(path: str, encoding: Optional[str] = None):
     """Open a resource file located in a python package or the local filesystem.
@@ -57,7 +59,8 @@ def load_resource(path: str, encoding: Optional[str] = None):
                 return io.TextIOWrapper(bstream, encoding=encoding)
             return bstream
     except IOError:
-        pass
+        LOGGER.warning("Resource not found: %s", path)
+        return None
 
 
 def dictConfig(config, new_file_path=None):
@@ -95,18 +98,7 @@ def fileConfig(
             raise RuntimeError(f"{fname} is invalid: {e}")
 
     if new_file_path and cp.has_section("handler_timed_file_handler"):
-        cp.set(
-            "handler_timed_file_handler",
-            "args",
-            str(
-                (
-                    f"{new_file_path}",
-                    "d",
-                    7,
-                    1,
-                )
-            ),
-        )
+        cp.set("handler_timed_file_handler", "args", str((new_file_path, "d", 7, 1)))
 
     formatters = _create_formatters(cp)
     with logging._lock:

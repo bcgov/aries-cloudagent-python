@@ -1,5 +1,6 @@
 """Cryptography functions used by BasicWallet."""
 
+import logging
 import re
 from collections import OrderedDict
 from typing import Callable, List, Optional, Sequence, Tuple, Union
@@ -19,6 +20,8 @@ from .bbs import (
 from .error import WalletError
 from .key_type import BLS12381G2, ED25519, KeyType
 from .util import b58_to_bytes, b64_to_bytes, bytes_to_b58, random_seed
+
+LOGGER = logging.getLogger(__name__)
 
 
 def create_keypair(
@@ -423,7 +426,7 @@ def decode_pack_message_outer(enc_message: bytes) -> Tuple[dict, dict, bool]:
     try:
         wrapper = JweEnvelope.from_json(enc_message)
     except ValidationError as err:
-        print(err)
+        LOGGER.error(err)
         raise ValueError("Invalid packed message")
 
     alg = wrapper.protected.get("alg")

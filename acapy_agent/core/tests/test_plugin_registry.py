@@ -537,6 +537,7 @@ class TestPluginRegistry(IsolatedAsyncioTestCase):
         mock_mod = mock.MagicMock()
         mock_mod.MESSAGE_TYPES = mock.MagicMock()
         mock_mod.CONTROLLERS = mock.MagicMock()
+        mock_mod.__name__ = "test_mod"
 
         with mock.patch.object(
             ClassLoader, "load_module", mock.MagicMock()
@@ -595,6 +596,7 @@ class TestPluginRegistry(IsolatedAsyncioTestCase):
         mock_mod = mock.MagicMock()
         mock_mod.MESSAGE_TYPES = mock.MagicMock()
         mock_mod.CONTROLLERS = mock.MagicMock()
+        mock_mod.__name__ = "test_mod"
 
         with mock.patch.object(
             ClassLoader, "load_module", mock.MagicMock()

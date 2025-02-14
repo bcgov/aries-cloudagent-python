@@ -40,7 +40,11 @@ class CredProblemReportHandler(BaseHandler):
                 context.message,
                 context.connection_record.connection_id,
             )
-        except (StorageError, StorageNotFoundError):
+        except StorageNotFoundError:
+            self._logger.warning(
+                "Record not found while processing issue-credential v2.0 problem report"
+            )
+        except StorageError:
             self._logger.exception(
-                "Error processing issue-credential v2.0 problem report message"
+                "Storage error while processing issue-credential v2.0 problem report"
             )

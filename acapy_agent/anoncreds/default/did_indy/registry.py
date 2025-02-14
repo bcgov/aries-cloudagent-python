@@ -42,7 +42,7 @@ class DIDIndyRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
 
     async def setup(self, context: InjectionContext):
         """Setup."""
-        print("Successfully registered DIDIndyRegistry")
+        LOGGER.info("Successfully registered DIDIndyRegistry")
 
     async def get_schema(self, profile: Profile, schema_id: str) -> GetSchemaResult:
         """Get a schema from the registry."""

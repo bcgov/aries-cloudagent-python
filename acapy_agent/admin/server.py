@@ -226,11 +226,15 @@ async def upgrade_middleware(request: web.BaseRequest, handler: Coroutine):
 async def debug_middleware(request: web.BaseRequest, handler: Coroutine):
     """Show request detail in debug log."""
 
-    if LOGGER.isEnabledFor(logging.DEBUG):
+    is_status_check = str(request.rel_url).startswith("/status/")
+
+    if LOGGER.isEnabledFor(logging.DEBUG) and not is_status_check:
         LOGGER.debug(f"Incoming request: {request.method} {request.path_qs}")
         LOGGER.debug(f"Match info: {request.match_info}")
-        body = await request.text() if request.body_exists else None
-        LOGGER.debug(f"Body: {body}")
+
+        if request.body_exists:
+            body = await request.text()
+            LOGGER.debug(f"Body: {body}")
 
     return await handler(request)
 

@@ -74,7 +74,7 @@ from ..version import RECORD_TYPE_ACAPY_VERSION, __version__
 from ..wallet.anoncreds_upgrade import upgrade_wallet_to_anoncreds_if_requested
 from ..wallet.did_info import DIDInfo
 from .dispatcher import Dispatcher
-from .error import StartupError
+from .error import ProfileError, StartupError
 from .oob_processor import OobMessageProcessor
 from .util import SHUTDOWN_EVENT_TOPIC, STARTUP_EVENT_TOPIC
 
@@ -119,41 +119,60 @@ class Conductor:
 
     async def setup(self):
         """Initialize the global request context."""
+        LOGGER.debug("Starting setup of the Conductor")
 
         context = await self.context_builder.build_context()
+        LOGGER.debug("Context built successfully")
 
         if self.force_agent_anoncreds:
+            LOGGER.debug(
+                "Force agent anoncreds is enabled. "
+                "Setting wallet type to 'askar-anoncreds'."
+            )
             context.settings.set_value("wallet.type", "askar-anoncreds")
 
         # Fetch genesis transactions if necessary
         if context.settings.get("ledger.ledger_config_list"):
+            LOGGER.debug(
+                "Ledger config list found. Loading multiple genesis transactions"
+            )
             await load_multiple_genesis_transactions_from_config(context.settings)
         if (
             context.settings.get("ledger.genesis_transactions")
             or context.settings.get("ledger.genesis_file")
             or context.settings.get("ledger.genesis_url")
         ):
+            LOGGER.debug(
+                "Genesis transactions/configurations found. Fetching genesis transactions"
+            )
             await get_genesis_transactions(context.settings)
 
         # Configure the root profile
+        LOGGER.debug("Configuring the root profile and setting up public DID")
         self.root_profile, self.setup_public_did = await wallet_config(context)
         context = self.root_profile.context
+        LOGGER.debug("Root profile configured successfully")
 
         # Multiledger Setup
-        if (
-            context.settings.get("ledger.ledger_config_list")
-            and len(context.settings.get("ledger.ledger_config_list")) > 0
-        ):
+        ledger_config_list = context.settings.get("ledger.ledger_config_list")
+        if ledger_config_list and len(ledger_config_list) > 0:
+            LOGGER.debug("Setting up multiledger manager")
             context.injector.bind_provider(
                 BaseMultipleLedgerManager,
                 MultiIndyLedgerManagerProvider(self.root_profile),
             )
-            if not (context.settings.get("ledger.genesis_transactions")):
+            if not context.settings.get("ledger.genesis_transactions"):
                 ledger = context.injector.inject(BaseLedger)
+                LOGGER.debug(
+                    "Ledger backend: %s, Profile backend: %s",
+                    ledger.BACKEND_NAME,
+                    self.root_profile.BACKEND_NAME,
+                )
                 if (
                     self.root_profile.BACKEND_NAME == "askar"
                     and ledger.BACKEND_NAME == "indy-vdr"
                 ):
+                    LOGGER.debug("Binding IndyCredxVerifier for 'askar' backend.")
                     context.injector.bind_provider(
                         IndyVerifier,
                         ClassProvider(
@@ -165,6 +184,9 @@ class Conductor:
                     self.root_profile.BACKEND_NAME == "askar-anoncreds"
                     and ledger.BACKEND_NAME == "indy-vdr"
                 ):
+                    LOGGER.debug(
+                        "Binding IndyCredxVerifier for 'askar-anoncreds' backend."
+                    )
                     context.injector.bind_provider(
                         IndyVerifier,
                         ClassProvider(
@@ -173,6 +195,7 @@ class Conductor:
                         ),
                     )
                 else:
+                    LOGGER.error("Unsupported ledger backend for multiledger setup.")
                     raise MultipleLedgerManagerError(
                         "Multiledger is supported only for Indy SDK or Askar "
                         "[Indy VDR] profile"
@@ -182,13 +205,17 @@ class Conductor:
         )
 
         # Configure the ledger
-        if not await ledger_config(
+        ledger_configured = await ledger_config(
             self.root_profile, self.setup_public_did and self.setup_public_did.did
-        ):
-            LOGGER.warning("No ledger configured")
+        )
+        if not ledger_configured:
+            LOGGER.warning("No ledger configured.")
+        else:
+            LOGGER.debug("Ledger configured successfully.")
 
         if not context.settings.get("transport.disabled"):
             # Register all inbound transports if enabled
+            LOGGER.debug("Transport not disabled. Setting up inbound transports.")
             self.inbound_transport_manager = InboundTransportManager(
                 self.root_profile, self.inbound_message_router, self.handle_not_returned
             )
@@ -196,45 +223,54 @@ class Conductor:
             context.injector.bind_instance(
                 InboundTransportManager, self.inbound_transport_manager
             )
+            LOGGER.debug("Inbound transports registered successfully.")
 
-        if not context.settings.get("transport.disabled"):
             # Register all outbound transports
+            LOGGER.debug("Setting up outbound transports.")
             self.outbound_transport_manager = OutboundTransportManager(
                 self.root_profile, self.handle_not_delivered
             )
             await self.outbound_transport_manager.setup()
+            LOGGER.debug("Outbound transports registered successfully.")
 
         # Initialize dispatcher
+        LOGGER.debug("Initializing dispatcher.")
         self.dispatcher = Dispatcher(self.root_profile)
         await self.dispatcher.setup()
+        LOGGER.debug("Dispatcher initialized successfully.")
 
         wire_format = context.inject_or(BaseWireFormat)
         if wire_format and hasattr(wire_format, "task_queue"):
             wire_format.task_queue = self.dispatcher.task_queue
+            LOGGER.debug("Wire format task queue bound to dispatcher.")
 
         # Bind manager for multitenancy related tasks
         if context.settings.get("multitenant.enabled"):
+            LOGGER.debug("Multitenant is enabled. Binding MultitenantManagerProvider.")
             context.injector.bind_provider(
                 BaseMultitenantManager, MultitenantManagerProvider(self.root_profile)
             )
 
         # Bind route manager provider
+        LOGGER.debug("Binding RouteManagerProvider.")
         context.injector.bind_provider(
             RouteManager, RouteManagerProvider(self.root_profile)
         )
 
-        # Bind oob message processor to be able to receive and process un-encrypted
-        # messages
+        # Bind OobMessageProcessor to be able to receive and process unencrypted messages
+        LOGGER.debug("Binding OobMessageProcessor.")
         context.injector.bind_instance(
             OobMessageProcessor,
             OobMessageProcessor(inbound_message_router=self.inbound_message_router),
         )
 
         # Bind default PyLD document loader
+        LOGGER.debug("Binding default DocumentLoader.")
         context.injector.bind_instance(DocumentLoader, DocumentLoader(self.root_profile))
 
         # Admin API
         if context.settings.get("admin.enabled"):
+            LOGGER.debug("Admin API is enabled. Attempting to register admin server.")
             try:
                 admin_host = context.settings.get("admin.host", "0.0.0.0")
                 admin_port = context.settings.get("admin.port", "80")
@@ -250,13 +286,15 @@ class Conductor:
                     self.get_stats,
                 )
                 context.injector.bind_instance(BaseAdminServer, self.admin_server)
+                LOGGER.debug("Admin server registered on %s:%s", admin_host, admin_port)
             except Exception:
-                LOGGER.exception("Unable to register admin server")
+                LOGGER.exception("Unable to register admin server.")
                 raise
 
         # Fetch stats collector, if any
         collector = context.inject_or(Collector)
         if collector:
+            LOGGER.debug("Stats collector found. Wrapping methods for collection.")
             # add stats to our own methods
             collector.wrap(
                 self,
@@ -275,33 +313,41 @@ class Conductor:
                     "find_inbound_connection",
                 ),
             )
+            LOGGER.debug("Methods wrapped with stats collector.")
 
     async def start(self) -> None:
         """Start the agent."""
-
+        LOGGER.debug("Starting the Conductor agent.")
         assert self.root_profile, "root_profile is not set"
         context = self.root_profile.context
         await self.check_for_valid_wallet_type(self.root_profile)
+        LOGGER.debug("Wallet type validated.")
 
         if not context.settings.get("transport.disabled"):
             # Start up transports if enabled
             try:
+                LOGGER.debug("Transport not disabled. Starting inbound transports.")
                 await self.inbound_transport_manager.start()
+                LOGGER.debug("Inbound transports started successfully.")
             except Exception:
-                LOGGER.exception("Unable to start inbound transports")
+                LOGGER.exception("Unable to start inbound transports.")
                 raise
             try:
+                LOGGER.debug("Starting outbound transports.")
                 await self.outbound_transport_manager.start()
+                LOGGER.debug("Outbound transports started successfully.")
             except Exception:
-                LOGGER.exception("Unable to start outbound transports")
+                LOGGER.exception("Unable to start outbound transports.")
                 raise
 
         # Start up Admin server
         if self.admin_server:
+            LOGGER.debug("Admin server present. Starting admin server.")
             try:
                 await self.admin_server.start()
+                LOGGER.debug("Admin server started successfully.")
             except Exception:
-                LOGGER.exception("Unable to start administration API")
+                LOGGER.exception("Unable to start administration API.")
             # Make admin responder available during message parsing
             # This allows webhooks to be called when a connection is marked active,
             # for example
@@ -310,9 +356,11 @@ class Conductor:
                 self.admin_server.outbound_message_router,
             )
             context.injector.bind_instance(BaseResponder, responder)
+            LOGGER.debug("Admin responder bound to injector.")
 
         # Get agent label
         default_label = context.settings.get("default_label")
+        LOGGER.debug("Agent label: %s", default_label)
 
         if context.settings.get("transport.disabled"):
             LoggingConfigurator.print_banner(
@@ -337,6 +385,7 @@ class Conductor:
         from_version_storage = None
         from_version = None
         agent_version = f"v{__version__}"
+        LOGGER.debug("Recording ACA-Py version in wallet if needed.")
         async with self.root_profile.session() as session:
             storage: BaseStorage = session.context.inject(BaseStorage)
             try:
@@ -351,9 +400,15 @@ class Conductor:
                 )
             except StorageNotFoundError:
                 LOGGER.warning("Wallet version storage record not found.")
+
         from_version_config = self.root_profile.settings.get("upgrade.from_version")
         force_upgrade_flag = (
             self.root_profile.settings.get("upgrade.force_upgrade") or False
+        )
+        LOGGER.debug(
+            "Force upgrade flag: %s, From version config: %s",
+            force_upgrade_flag,
+            from_version_config,
         )
 
         if force_upgrade_flag and from_version_config:
@@ -366,8 +421,13 @@ class Conductor:
                     from_version = from_version_storage
             else:
                 from_version = from_version_config
+            LOGGER.debug(
+                "Determined from_version based on force_upgrade: %s", from_version
+            )
         else:
             from_version = from_version_storage or from_version_config
+            LOGGER.debug("Determined from_version: %s", from_version)
+
         if not from_version:
             LOGGER.warning(
                 (
@@ -378,17 +438,27 @@ class Conductor:
             )
             from_version = DEFAULT_ACAPY_VERSION
             self.root_profile.settings.set_value("upgrade.from_version", from_version)
+            LOGGER.debug("Set upgrade.from_version to default: %s", from_version)
+
         config_available_list = get_upgrade_version_list(
             config_path=self.root_profile.settings.get("upgrade.config_path"),
             from_version=from_version,
         )
+        LOGGER.debug("Available upgrade versions: %s", config_available_list)
+
         if len(config_available_list) >= 1:
+            LOGGER.info("Upgrade configurations available. Initiating upgrade.")
             await upgrade(profile=self.root_profile)
         elif not (from_version_storage and from_version_storage == agent_version):
+            LOGGER.debug("No upgrades needed. Adding version record.")
             await add_version_record(profile=self.root_profile, version=agent_version)
 
         # Create a static connection for use by the test-suite
         if context.settings.get("debug.test_suite_endpoint"):
+            LOGGER.debug(
+                "Test suite endpoint configured. "
+                "Creating static connection for test suite."
+            )
             mgr = BaseConnectionManager(self.root_profile)
             their_endpoint = context.settings["debug.test_suite_endpoint"]
             _, _, test_conn = await mgr.create_static_connection(
@@ -397,32 +467,38 @@ class Conductor:
                 their_endpoint=their_endpoint,
                 alias="test-suite",
             )
-            print("Created static connection for test suite")
-            print(" - My DID:", test_conn.my_did)
-            print(" - Their DID:", test_conn.their_did)
-            print(" - Their endpoint:", their_endpoint)
-            print()
+            LOGGER.info(
+                "Created static connection for test suite\n"
+                f" - My DID: {test_conn.my_did}\n"
+                f" - Their DID: {test_conn.their_did}\n"
+                f" - Their endpoint: {their_endpoint}\n"
+            )
             del mgr
+            LOGGER.debug("Static connection for test suite created and manager deleted.")
 
         # Clear default mediator
         if context.settings.get("mediation.clear"):
+            LOGGER.debug("Mediation clear flag set. Clearing default mediator.")
             mediation_mgr = MediationManager(self.root_profile)
             await mediation_mgr.clear_default_mediator()
-            print("Default mediator cleared.")
+            LOGGER.info("Default mediator cleared.")
 
-        # Clear default mediator
         # Set default mediator by id
         default_mediator_id = context.settings.get("mediation.default_id")
         if default_mediator_id:
+            LOGGER.debug("Setting default mediator to ID: %s", default_mediator_id)
             mediation_mgr = MediationManager(self.root_profile)
             try:
                 await mediation_mgr.set_default_mediator_by_id(default_mediator_id)
-                print(f"Default mediator set to {default_mediator_id}")
+                LOGGER.info(f"Default mediator set to {default_mediator_id}")
             except Exception:
-                LOGGER.exception("Error updating default mediator")
+                LOGGER.exception("Error updating default mediator.")
 
         # Print an invitation to the terminal
         if context.settings.get("debug.print_invitation"):
+            LOGGER.debug(
+                "Debug flag for printing invitation is set. Creating invitation."
+            )
             try:
                 mgr = OutOfBandManager(self.root_profile)
                 invi_rec = await mgr.create_invitation(
@@ -436,17 +512,17 @@ class Conductor:
                 )
                 base_url = context.settings.get("invite_base_url")
                 invite_url = invi_rec.invitation.to_url(base_url)
-                print("Invitation URL:")
-                print(invite_url, flush=True)
+                LOGGER.info(f"Invitation URL:\n{invite_url}")
                 qr = QRCode(border=1)
                 qr.add_data(invite_url)
                 qr.print_ascii(invert=True)
                 del mgr
             except Exception:
-                LOGGER.exception("Error creating invitation")
+                LOGGER.exception("Error creating invitation.")
 
         # mediation connection establishment
         provided_invite: str = context.settings.get("mediation.invite")
+        LOGGER.debug("Mediation invite provided: %s", provided_invite)
 
         try:
             async with self.root_profile.session() as session:
@@ -454,19 +530,28 @@ class Conductor:
                 mediation_invite_record = await invite_store.get_mediation_invite_record(
                     provided_invite
                 )
+                LOGGER.debug("Mediation invite record retrieved successfully.")
         except Exception:
-            LOGGER.exception("Error retrieving mediator invitation")
+            LOGGER.exception("Error retrieving mediator invitation.")
             mediation_invite_record = None
 
         # Accept mediation invitation if one was specified or stored
         if mediation_invite_record is not None:
+            LOGGER.debug(
+                "Mediation invite record found. "
+                "Attempting to accept mediation invitation."
+            )
             try:
                 if not mediation_invite_record.used:
-                    # clear previous mediator configuration before establishing a
-                    # new one
+                    # clear previous mediator configuration before establishing a new one
+                    LOGGER.debug(
+                        "Mediation invite not used. "
+                        "Clearing default mediator before accepting new invite."
+                    )
                     await MediationManager(self.root_profile).clear_default_mediator()
 
                     mgr = OutOfBandManager(self.root_profile)
+                    LOGGER.debug("Receiving mediation invitation.")
                     record = await mgr.receive_invitation(
                         invitation=InvitationMessage.from_url(
                             mediation_invite_record.invite
@@ -477,6 +562,7 @@ class Conductor:
                         await MediationInviteStore(
                             session.context.inject(BaseStorage)
                         ).mark_default_invite_as_used()
+                        LOGGER.debug("Marked mediation invite as used.")
 
                         await record.metadata_set(
                             session, MediationManager.SEND_REQ_AFTER_CONNECTION, True
@@ -484,48 +570,65 @@ class Conductor:
                         await record.metadata_set(
                             session, MediationManager.SET_TO_DEFAULT_ON_GRANTED, True
                         )
+                        LOGGER.debug("Set mediation metadata after connection.")
 
-                    print("Attempting to connect to mediator...")
+                    LOGGER.info("Attempting to connect to mediator...")
                     del mgr
+                    LOGGER.debug("Mediation manager deleted after setting up mediator.")
             except Exception:
-                LOGGER.exception("Error accepting mediation invitation")
+                LOGGER.exception("Error accepting mediation invitation.")
 
         try:
+            LOGGER.debug("Checking for wallet upgrades in progress.")
             await self.check_for_wallet_upgrades_in_progress()
+            LOGGER.debug("Wallet upgrades check completed.")
         except Exception:
             LOGGER.exception(
-                "An exception was caught while checking for wallet upgrades in progress"
+                "An exception was caught while checking for wallet upgrades in progress."
             )
 
         # notify protocols of startup status
+        LOGGER.debug("Notifying protocols of startup status.")
         await self.root_profile.notify(STARTUP_EVENT_TOPIC, {})
+        LOGGER.debug("Startup notification sent.")
 
     async def stop(self, timeout=1.0):
         """Stop the agent."""
+        LOGGER.info("Stopping the Conductor agent.")
         # notify protocols that we are shutting down
         if self.root_profile:
+            LOGGER.debug("Notifying protocols of shutdown.")
             await self.root_profile.notify(SHUTDOWN_EVENT_TOPIC, {})
+            LOGGER.debug("Shutdown notification sent.")
 
         shutdown = TaskQueue()
         if self.dispatcher:
+            LOGGER.debug("Initiating shutdown of dispatcher.")
             shutdown.run(self.dispatcher.complete())
         if self.admin_server:
+            LOGGER.debug("Initiating shutdown of admin server.")
             shutdown.run(self.admin_server.stop())
         if self.inbound_transport_manager:
+            LOGGER.debug("Initiating shutdown of inbound transport manager.")
             shutdown.run(self.inbound_transport_manager.stop())
         if self.outbound_transport_manager:
+            LOGGER.debug("Initiating shutdown of outbound transport manager.")
             shutdown.run(self.outbound_transport_manager.stop())
 
         if self.root_profile:
             # close multitenant profiles
             multitenant_mgr = self.context.inject_or(BaseMultitenantManager)
             if multitenant_mgr:
+                LOGGER.debug("Closing multitenant profiles.")
                 for profile in multitenant_mgr.open_profiles:
+                    LOGGER.debug("Closing profile: %s", profile.name)
                     shutdown.run(profile.close())
-
+            LOGGER.debug("Closing root profile.")
             shutdown.run(self.root_profile.close())
 
+        LOGGER.debug("Waiting for shutdown tasks to complete with timeout=%f.", timeout)
         await shutdown.complete(timeout)
+        LOGGER.info("Conductor agent stopped successfully.")
 
     def inbound_message_router(
         self,
@@ -567,22 +670,26 @@ class Conductor:
     def dispatch_complete(self, message: InboundMessage, completed: CompletedTask):
         """Handle completion of message dispatch."""
         if completed.exc_info:
-            LOGGER.exception("Exception in message handler:", exc_info=completed.exc_info)
-            if isinstance(completed.exc_info[1], LedgerConfigError) or isinstance(
-                completed.exc_info[1], LedgerTransactionError
-            ):
-                LOGGER.error(
+            exc_class, exc, _ = completed.exc_info
+            if isinstance(exc, (LedgerConfigError, LedgerTransactionError)):
+                LOGGER.fatal(
                     "%shutdown on ledger error %s",
                     "S" if self.admin_server else "No admin server to s",
-                    str(completed.exc_info[1]),
+                    str(exc),
+                    exc_info=completed.exc_info,
                 )
                 if self.admin_server:
                     self.admin_server.notify_fatal_error()
+            elif isinstance(exc, (ProfileError, StorageNotFoundError)):
+                LOGGER.warning(
+                    "Storage error occurred in message handler: %s: %s",
+                    exc_class.__name__,
+                    str(exc),
+                    exc_info=completed.exc_info,
+                )
             else:
-                LOGGER.error(
-                    "DON'T shutdown on %s %s",
-                    completed.exc_info[0].__name__,
-                    str(completed.exc_info[1]),
+                LOGGER.exception(
+                    "Exception in message handler:", exc_info=completed.exc_info
                 )
         self.inbound_transport_manager.dispatch_complete(message, completed)
 

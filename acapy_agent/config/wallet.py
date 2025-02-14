@@ -62,11 +62,11 @@ async def wallet_config(
 
     if provision:
         if profile.created:
-            print("Created new profile")
+            LOGGER.info("Created new profile")
         else:
-            print("Opened existing profile")
-        print("Profile backend:", profile.backend)
-        print("Profile name:", profile.name)
+            LOGGER.info("Opened existing profile")
+        LOGGER.info("Profile backend: %s", profile.backend)
+        LOGGER.info("Profile name: %s", profile.name)
 
     wallet_seed = context.settings.get("wallet.seed")
     wallet_local_did = context.settings.get("wallet.local_did")
@@ -85,8 +85,8 @@ async def wallet_config(
                 )
                 public_did = replace_did_info.did
                 await wallet.set_public_did(public_did)
-                print(f"Created new public DID: {public_did}")
-                print(f"Verkey: {replace_did_info.verkey}")
+                LOGGER.info(f"Created new public DID: {public_did}")
+                LOGGER.info(f"Verkey: {replace_did_info.verkey}")
             else:
                 # If we already have a registered public did and it doesn't match
                 # the one derived from `wallet_seed` then we error out.
@@ -108,20 +108,20 @@ async def wallet_config(
             )
             local_did = local_did_info.did
             if provision:
-                print(f"Created new local DID: {local_did}")
-                print(f"Verkey: {local_did_info.verkey}")
+                LOGGER.info(f"Created new local DID: {local_did}")
+                LOGGER.info(f"Verkey: {local_did_info.verkey}")
         else:
             public_did_info = await wallet.create_public_did(
                 method=SOV, key_type=ED25519, seed=wallet_seed
             )
             public_did = public_did_info.did
             if provision:
-                print(f"Created new public DID: {public_did}")
-                print(f"Verkey: {public_did_info.verkey}")
+                LOGGER.info(f"Created new public DID: {public_did}")
+                LOGGER.info(f"Verkey: {public_did_info.verkey}")
             # wait until ledger config to set public DID endpoint - wallet goes first
 
     if provision and not wallet_local_did and not public_did:
-        print("No public DID")
+        LOGGER.info("No public DID")
 
     # Debug settings
     test_seed = context.settings.get("debug.seed")
