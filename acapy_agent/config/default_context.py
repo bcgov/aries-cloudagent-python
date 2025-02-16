@@ -9,6 +9,7 @@ from ..core.goal_code_registry import GoalCodeRegistry
 from ..core.plugin_registry import PluginRegistry
 from ..core.profile import Profile, ProfileManager, ProfileManagerProvider
 from ..core.protocol_registry import ProtocolRegistry
+from ..didcomm_v2.protocol_registry import V2ProtocolRegistry
 from ..protocols.actionmenu.v1_0.base_service import BaseMenuService
 from ..protocols.actionmenu.v1_0.driver_service import DriverMenuService
 from ..protocols.introduction.v0_1.base_service import BaseIntroductionService
@@ -46,6 +47,7 @@ class DefaultContextBuilder(ContextBuilder):
 
         # Global protocol registry
         context.injector.bind_instance(ProtocolRegistry, ProtocolRegistry())
+        context.injector.bind_instance(V2ProtocolRegistry, V2ProtocolRegistry())
 
         # Global goal code registry
         context.injector.bind_instance(GoalCodeRegistry, GoalCodeRegistry())
@@ -136,6 +138,7 @@ class DefaultContextBuilder(ContextBuilder):
         # Register standard protocol plugins
         if not self.settings.get("transport.disabled"):
             plugin_registry.register_package("acapy_agent.protocols")
+            plugin_registry.register_package("acapy_agent.protocols_v2")
 
         # Currently providing admin routes only
         plugin_registry.register_plugin("acapy_agent.holder")

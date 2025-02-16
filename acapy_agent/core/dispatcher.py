@@ -12,9 +12,11 @@ import weakref
 from typing import Callable, Coroutine, Optional, Union
 
 from aiohttp.web import HTTPException
+from didcomm_messaging import DIDCommMessaging, RoutingService
 
 from ..connections.base_manager import BaseConnectionManager
 from ..connections.models.conn_record import ConnRecord
+from ..connections.models.connection_target import ConnectionTarget
 from ..core.profile import Profile
 from ..messaging.agent_message import AgentMessage
 from ..messaging.base_message import BaseMessage, DIDCommVersion
@@ -34,6 +36,7 @@ from ..utils.task_queue import CompletedTask, PendingTask, TaskQueue
 from ..utils.tracing import get_timer, trace_event
 from .error import ProtocolMinorVersionNotSupported
 from .protocol_registry import ProtocolRegistry
+from ..didcomm_v2.protocol_registry import V2ProtocolRegistry
 
 
 class ProblemReportParseError(MessageParseError):
@@ -137,9 +140,86 @@ class Dispatcher:
     ):
         """Handle a DIDComm V2 message."""
 
+        error_result = None
+        message = None
+
+        session = await profile.session()
+        from ..connections.models.conn_peer_record import PeerwiseRecord
+        peer = PeerwiseRecord(their_did=inbound_message.receipt.sender_verkey, my_did=inbound_message.receipt.recipient_verkey)
+        await peer.save(session)
+        await profile.notify(
+            "acapy::webhook::pairwise_did",
+            {
+                "pairwise_id": peer.pairwise_id,
+                "status": "connected",
+                "recipient_did": inbound_message.receipt.sender_verkey,
+                "message": inbound_message.payload,
+            },
+        )
+
+        try:
+            message = await self.make_v2_message(profile, inbound_message.payload)
+        except ProblemReportParseError:
+            pass  # avoid problem report recursion
+        except MessageParseError as e:
+            self.logger.error(f"Message parsing failed: {str(e)}, sending problem report")
+            error_result = ProblemReport(
+                description={
+                    "en": str(e),
+                    "code": "message-parse-failure",
+                }
+            )
+            if inbound_message.receipt.thread_id:
+                error_result.assign_thread_id(inbound_message.receipt.thread_id)
+
+        messaging = session.inject(DIDCommMessaging)
+        routing_service = session.inject(RoutingService)
+        frm = inbound_message.payload.get("from")
+
+        services = await routing_service._resolve_services(messaging.resolver, frm)
+        chain = [
+            {
+                "did": frm,
+                "service": services,
+            }
+        ]
+
+        # Loop through service DIDs until we run out of DIDs to forward to
+        to_did = services[0].service_endpoint.uri
+        found_forwardable_service = await routing_service.is_forwardable_service(
+            messaging.resolver, services[0]
+        )
+        while found_forwardable_service:
+            services = await routing_service._resolve_services(messaging.resolver, to_did)
+            if services:
+                chain.append(
+                    {
+                        "did": to_did,
+                        "service": services,
+                    }
+                )
+                to_did = services[0].service_endpoint.uri
+            found_forwardable_service = (
+                await routing_service.is_forwardable_service(
+                    messaging.resolver, services[0]
+                )
+                if services
+                else False
+            )
+        reply_destination = [
+            ConnectionTarget(
+                did=inbound_message.receipt.sender_verkey,
+                endpoint=service.service_endpoint.uri,
+                recipient_keys=[inbound_message.receipt.sender_verkey],
+                sender_key=inbound_message.receipt.recipient_verkey,
+            )
+            for service in chain[-1]["service"]
+        ]
+
         # send a DCV2 Problem Report here for testing, and to punt procotol handling down
         # the road a bit
         context = RequestContext(profile)
+        context.message = message
         context.message_receipt = inbound_message.receipt
         responder = DispatcherResponder(
             context,
@@ -147,21 +227,80 @@ class Dispatcher:
             send_outbound,
             reply_session_id=inbound_message.session_id,
             reply_to_verkey=inbound_message.receipt.sender_verkey,
+            target_list=reply_destination,
         )
 
         context.injector.bind_instance(BaseResponder, responder)
-        error_result = V2AgentMessage(
-            message={
-                "type": "https://didcomm.org/report-problem/2.0/problem-report",
-                "body": {
-                    "comment": "No Handlers Found",
-                    "code": "e.p.msg.not-found",
-                },
-            }
-        )
-        if inbound_message.receipt.thread_id:
-            error_result.message["pthid"] = inbound_message.receipt.thread_id
-        await responder.send_reply(error_result)
+        if not message:
+            error_result = V2AgentMessage(
+                message={
+                    "type": "https://didcomm.org/report-problem/2.0/problem-report",
+                    "body": {
+                        "comment": "No Handlers Found",
+                        "code": "e.p.msg.not-found",
+                    },
+                    "from": inbound_message.receipt.recipient_verkey,
+                    "to": [inbound_message.receipt.sender_verkey],
+                }
+            )
+            if inbound_message.receipt.thread_id:
+                error_result.message["pthid"] = inbound_message.receipt.thread_id
+
+        if error_result:
+            await responder.send_reply(error_result)
+        elif context.message:
+            context.injector.bind_instance(BaseResponder, responder)
+
+            handler = context.message
+            if self.collector:
+                handler = self.collector.wrap_coro(handler, [handler.__qualname__])
+            await handler()(context, responder, payload=inbound_message.payload)
+
+    async def make_v2_message(self, profile: Profile, parsed_msg: dict) -> BaseMessage:
+        """Deserialize a message dict into the appropriate message instance.
+
+        Given a dict describing a message, this method
+        returns an instance of the related message class.
+
+        Args:
+            parsed_msg: The parsed message
+            profile: Profile
+
+        Returns:
+            An instance of the corresponding message class for this message
+
+        Raises:
+            MessageParseError: If the message doesn't specify @type
+            MessageParseError: If there is no message class registered to handle
+            the given type
+
+        """
+        if not isinstance(parsed_msg, dict):
+            raise MessageParseError("Expected a JSON object")
+        message_type = parsed_msg.get("type")
+
+        if not message_type:
+            raise MessageParseError("Message does not contain 'type' parameter")
+
+        registry: V2ProtocolRegistry = self.profile.inject(V2ProtocolRegistry)
+        try:
+            message_cls = registry.protocols_matching_query(message_type)
+        except ProtocolMinorVersionNotSupported as e:
+            raise MessageParseError(f"Problem parsing message type. {e}")
+
+        if not message_cls:
+            raise MessageParseError(f"Unrecognized message type {message_type}")
+
+        try:
+            instance = registry.handlers[message_cls[0]]
+            if isinstance(instance, DeferLoad):
+                instance = instance.resolved
+        except BaseModelError as e:
+            if "/problem-report" in message_type:
+                raise ProblemReportParseError("Error parsing problem report message")
+            raise MessageParseError(f"Error deserializing message: {e}") from e
+
+        return instance
 
     async def handle_v1_message(
         self,

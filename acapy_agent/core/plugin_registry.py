@@ -11,6 +11,7 @@ from ..utils.classloader import ClassLoader, ModuleLoadError
 from .error import ProtocolDefinitionValidationError
 from .goal_code_registry import GoalCodeRegistry
 from .protocol_registry import ProtocolRegistry
+from ..didcomm_v2.protocol_registry import V2ProtocolRegistry
 
 LOGGER = logging.getLogger(__name__)
 
@@ -218,8 +219,12 @@ class PluginRegistry:
         version_definition: Optional[dict] = None,
     ):
         """Load a particular protocol version."""
+        v2_protocol_registry = context.inject(V2ProtocolRegistry)
         protocol_registry = context.inject(ProtocolRegistry)
         goal_code_registry = context.inject(GoalCodeRegistry)
+        if hasattr(mod, "HANDLERS"):
+            for message_type, handler in mod.HANDLERS:
+                v2_protocol_registry.register_handler(message_type, handler)
         if hasattr(mod, "MESSAGE_TYPES"):
             protocol_registry.register_message_types(
                 mod.MESSAGE_TYPES, version_definition=version_definition

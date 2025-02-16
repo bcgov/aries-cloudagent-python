@@ -38,6 +38,7 @@ class HttpTransport(BaseInboundTransport):
         app = web.Application(**app_args)
         app.add_routes([web.get("/", self.invite_message_handler)])
         app.add_routes([web.post("/", self.inbound_message_handler)])
+        app.add_routes([web.options("/", self.options_message_handler)])
         return app
 
     async def start(self) -> None:
@@ -127,6 +128,25 @@ class HttpTransport(BaseInboundTransport):
                             headers={"Content-Type": "application/json"},
                         )
         return web.Response(status=200)
+
+    async def options_message_handler(self, request: web.BaseRequest):
+        """Message handler for invites.
+
+        Args:
+            request: aiohttp request object
+
+        Returns:
+            The web response
+
+        """
+        return web.Response(
+            status=200,
+            headers={
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET,POST",
+            },
+        )
 
     async def invite_message_handler(self, request: web.BaseRequest):
         """Message handler for invites.
