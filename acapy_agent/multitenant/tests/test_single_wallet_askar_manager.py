@@ -52,7 +52,7 @@ class TestSingleWalletAskarMultitenantManager(IsolatedAsyncioTestCase):
             ) as AskarProfile,
         ):
             sub_wallet_profile_context = InjectionContext()
-            sub_wallet_profile = AskarProfile(None, None)
+            sub_wallet_profile = await AskarProfile.create(None, None)
             sub_wallet_profile.context.copy.return_value = sub_wallet_profile_context
 
             def side_effect(context, provision):
@@ -127,7 +127,7 @@ class TestSingleWalletAskarMultitenantManager(IsolatedAsyncioTestCase):
             ) as AskarAnoncredsProfile,
         ):
             sub_wallet_profile_context = InjectionContext()
-            sub_wallet_profile = AskarAnoncredsProfile(None, None)
+            sub_wallet_profile = await AskarAnoncredsProfile.create(None, None)
             sub_wallet_profile.context.copy.return_value = sub_wallet_profile_context
 
             def side_effect(context, provision):
@@ -150,7 +150,7 @@ class TestSingleWalletAskarMultitenantManager(IsolatedAsyncioTestCase):
         with mock.patch(
             "acapy_agent.multitenant.single_wallet_askar_manager.AskarProfile"
         ) as AskarProfile:
-            sub_wallet_profile = AskarProfile(None, None)
+            sub_wallet_profile = await AskarProfile.create(None, None)
             sub_wallet_profile.context.copy.return_value = InjectionContext()
             sub_wallet_profile.store.create_profile.return_value = create_profile_stub
             self.manager._multitenant_profile = sub_wallet_profile
@@ -176,7 +176,7 @@ class TestSingleWalletAskarMultitenantManager(IsolatedAsyncioTestCase):
             with mock.patch(
                 "acapy_agent.multitenant.single_wallet_askar_manager.AskarProfile"
             ) as AskarProfile:
-                sub_wallet_profile = AskarProfile(None, None)
+                sub_wallet_profile = await AskarProfile.create(None, None)
                 sub_wallet_profile.context.copy.return_value = InjectionContext()
 
                 def side_effect(context, provision):
@@ -207,7 +207,7 @@ class TestSingleWalletAskarMultitenantManager(IsolatedAsyncioTestCase):
         with mock.patch(
             "acapy_agent.multitenant.single_wallet_askar_manager.AskarProfile"
         ) as AskarProfile:
-            sub_wallet_profile = AskarProfile(None, None)
+            sub_wallet_profile = await AskarProfile.create(None, None)
             sub_wallet_profile.context.copy.return_value = InjectionContext()
             sub_wallet_profile.store.create_profile.return_value = create_profile_stub
             self.manager._multitenant_profile = sub_wallet_profile

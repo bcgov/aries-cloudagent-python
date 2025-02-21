@@ -109,13 +109,13 @@ class SingleWalletAskarMultitenantManager(BaseMultitenantManager):
 
         # return anoncreds profile if explicitly set as wallet type
         if profile_context.settings.get("wallet.type") == "askar-anoncreds":
-            return AskarAnoncredsProfile(
+            return await AskarAnoncredsProfile.create(
                 self._multitenant_profile.opened,
                 profile_context,
                 profile_id=wallet_record.wallet_id,
             )
 
-        return AskarProfile(
+        return await AskarProfile.create(
             self._multitenant_profile.opened,
             profile_context,
             profile_id=wallet_record.wallet_id,

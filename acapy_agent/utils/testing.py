@@ -38,11 +38,11 @@ async def create_test_profile(
     opened = await store_config.open_store(provision=True, in_memory=True)
 
     if settings.get("wallet.type") == "askar-anoncreds":
-        return AskarAnoncredsProfile(
+        return await AskarAnoncredsProfile.create(
             opened=opened,
             context=context,
         )
-    return AskarProfile(
+    return await AskarProfile.create(
         opened=opened,
         context=context,
     )

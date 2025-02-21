@@ -88,7 +88,7 @@ class MultitenantManager(BaseMultitenantManager):
 
         # return anoncreds profile if explicitly set as wallet type
         if profile.context.settings.get("wallet.type") == "askar-anoncreds":
-            return AskarAnoncredsProfile(
+            return await AskarAnoncredsProfile.create(
                 profile.opened,
                 profile.context,
             )

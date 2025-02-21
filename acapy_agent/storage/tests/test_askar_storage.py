@@ -385,7 +385,7 @@ class TestAskarStorageSearchSession(IsolatedAsyncioTestCase):
         profile = "profileId"
 
         with mock.patch("acapy_agent.storage.askar.AskarProfile") as AskarProfile:
-            askar_profile = AskarProfile(None, True)
+            askar_profile = await AskarProfile.create(None, True)
             askar_profile_scan = mock.MagicMock()
             askar_profile.store.scan.return_value = askar_profile_scan
             askar_profile.settings.get.return_value = profile

@@ -57,7 +57,8 @@ class TestMultiIndyLedgerManagerProvider(IsolatedAsyncioTestCase):
         context = InjectionContext()
         profile = await create_test_profile()
         context.injector.bind_instance(
-            BaseLedger, IndyVdrLedger(IndyVdrLedgerPool("name"), profile)
+            BaseLedger,
+            IndyVdrLedger(await IndyVdrLedgerPool.get_or_create(name="name"), profile),
         )
         provider = MultiIndyLedgerManagerProvider(profile)
         context.settings["ledger.ledger_config_list"] = LEDGER_CONFIG

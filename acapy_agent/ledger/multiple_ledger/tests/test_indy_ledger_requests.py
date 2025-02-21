@@ -24,7 +24,8 @@ class TestIndyLedgerRequestsExecutor(IsolatedAsyncioTestCase):
                 "genesis_transactions": "genesis_transactions",
             }
         ]
-        self.ledger = IndyVdrLedger(IndyVdrLedgerPool("test_prod_1"), self.profile)
+        pool = await IndyVdrLedgerPool.get_or_create(name="test_prod_1")
+        self.ledger = IndyVdrLedger(pool, self.profile)
         mock_ledger_manger = mock.MagicMock(BaseMultipleLedgerManager, autospec=True)
         mock_ledger_manger.extract_did_from_identifier = mock.MagicMock(
             return_value="WgWxqztrNooG92RXvxSTWv"

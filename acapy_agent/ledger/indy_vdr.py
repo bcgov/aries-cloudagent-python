@@ -11,7 +11,7 @@ from datetime import date, datetime, timezone
 from io import StringIO
 from pathlib import Path
 from time import time
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from indy_vdr import Pool, Request, VdrError, ledger, open_pool
 
@@ -40,36 +40,48 @@ LOGGER = logging.getLogger(__name__)
 
 def _normalize_txns(txns: str) -> str:
     """Normalize a set of genesis transactions."""
+    LOGGER.debug("Normalizing genesis transactions")
     lines = StringIO()
     for line in txns.splitlines():
         line = line.strip()
         if line:
             lines.write(line)
             lines.write("\n")
+    LOGGER.debug("Finished normalizing genesis transactions")
     return lines.getvalue()
 
 
 def _write_safe(path: Path, content: str):
     """Atomically write to a file path."""
+    LOGGER.debug("Writing content safely to path: %s", path)
     dir_path = path.parent
     with tempfile.NamedTemporaryFile(dir=dir_path, delete=False) as tmp:
+        LOGGER.debug("Created temporary file: %s", tmp.name)
         tmp.write(content.encode("utf-8"))
         tmp_name = tmp.name
+    LOGGER.debug("Renaming temporary file to target path")
     os.rename(tmp_name, path)
+    LOGGER.debug("Successfully wrote content to: %s", path)
 
 
 def _hash_txns(txns: str) -> str:
     """Obtain a hash of a set of genesis transactions."""
-    return hashlib.sha256(txns.encode("utf-8")).hexdigest()[-16:]
+    LOGGER.debug("Calculating hash of genesis transactions")
+    hash_value = hashlib.sha256(txns.encode("utf-8")).hexdigest()[-16:]
+    LOGGER.debug("Generated transaction hash: %s", hash_value)
+    return hash_value
 
 
 class IndyVdrLedgerPool:
-    """Indy-VDR ledger pool manager."""
+    """Indy-VDR ledger pool manager with singleton behavior based on configuration."""
+
+    _instances: Dict[tuple, "IndyVdrLedgerPool"] = {}
+    _lock = asyncio.Lock()
 
     def __init__(
         self,
-        name: str,
         *,
+        name: str,
         keepalive: int = 0,
         cache: Optional[BaseCache] = None,
         cache_duration: int = 600,
@@ -77,69 +89,203 @@ class IndyVdrLedgerPool:
         read_only: bool = False,
         socks_proxy: Optional[str] = None,
     ):
-        """Initialize an IndyLedger instance.
+        """Private constructor. Use 'get_or_create' to instantiate."""
+        # Instance attributes
+        self.name = name
+        self.keepalive = keepalive
+        self.cache = cache
+        self.cache_duration = cache_duration
+        self.genesis_transactions = genesis_transactions
+        self.read_only = read_only
+        self.socks_proxy = socks_proxy
+
+        self.handle: Optional[Pool] = None
+        self.taa_cache: Optional[str] = None
+
+        self._ref_count = 0
+        self._ref_lock = asyncio.Lock()
+        self._close_task: Optional[asyncio.Task] = None
+        self._cfg_path_cache: Optional[Path] = None
+        self._genesis_hash_cache: Optional[str] = None
+        self._genesis_txns_cache = genesis_transactions
+        self._init_config = bool(genesis_transactions)
+
+    @classmethod
+    async def get_or_create(
+        cls,
+        *,
+        name: str,
+        keepalive: int = 0,
+        cache: Optional[BaseCache] = None,
+        cache_duration: int = 600,
+        genesis_transactions: Optional[str] = None,
+        read_only: bool = False,
+        socks_proxy: Optional[str] = None,
+    ) -> "IndyVdrLedgerPool":
+        """Asynchronously get or create a singleton instance based on configuration.
 
         Args:
-            name: The pool ledger configuration name
-            keepalive: How many seconds to keep the ledger open
-            cache: The cache instance to use
-            cache_duration: The TTL for ledger cache entries
-            genesis_transactions: The ledger genesis transaction as a string
-            read_only: Prevent any ledger write operations
-            socks_proxy: Specifies socks proxy for ZMQ to connect to ledger pool
+            name: The pool ledger configuration name.
+            keepalive: How many seconds to keep the ledger open.
+            cache: The cache instance to use.
+            cache_duration: The TTL for ledger cache entries.
+            genesis_transactions: The ledger genesis transaction as a string.
+            read_only: Prevent any ledger write operations.
+            socks_proxy: Specifies socks proxy for ZMQ to connect to ledger pool.
+
+        Returns:
+            An initialized instance of IndyVdrLedgerPool.
         """
-        self.ref_count = 0
-        self.ref_lock = asyncio.Lock()
-        self.keepalive = keepalive
-        self.close_task: asyncio.Future = None
-        self.cache = cache
-        self.cache_duration: int = cache_duration
-        self.handle: Optional[Pool] = None
-        self.name = name
-        self.cfg_path_cache: Optional[Path] = None
-        self.genesis_hash_cache: Optional[str] = None
-        self.genesis_txns_cache = genesis_transactions
-        self.init_config = bool(genesis_transactions)
-        self.taa_cache: Optional[str] = None
-        self.read_only: bool = read_only
-        self.socks_proxy: str = socks_proxy
+        LOGGER.debug(
+            "Creating or retrieving IndyVdrLedgerPool instance with params: name=%s, "
+            "keepalive=%s, cache_duration=%s, read_only=%s",
+            name,
+            keepalive,
+            cache_duration,
+            read_only,
+        )
+
+        config_key = (
+            name,
+            keepalive,
+            cache_duration,
+            genesis_transactions,
+            read_only,
+            socks_proxy,
+        )
+        async with cls._lock:
+            if config_key not in cls._instances:
+                LOGGER.debug(
+                    "No existing instance found for config key, creating new instance"
+                )
+                ledger_pool_instance = cls(
+                    name=name,
+                    keepalive=keepalive,
+                    cache=cache,
+                    cache_duration=cache_duration,
+                    genesis_transactions=genesis_transactions,
+                    read_only=read_only,
+                    socks_proxy=socks_proxy,
+                )
+                try:
+                    LOGGER.debug("Initializing new IndyVdrLedgerPool instance")
+                    await ledger_pool_instance._initialize()
+                except Exception as e:
+                    LOGGER.error(
+                        "Initialization failed for IndyVdrLedgerPool with config: %s\n%s",
+                        config_key,
+                        e,
+                    )
+                    raise
+                cls._instances[config_key] = ledger_pool_instance
+                LOGGER.debug(
+                    "Successfully created new IndyVdrLedgerPool instance with name %s",
+                    name,
+                )
+            else:
+                LOGGER.debug(
+                    "Found existing IndyVdrLedgerPool instance with name %s", name
+                )
+                ledger_pool_instance = cls._instances[config_key]
+                await ledger_pool_instance._cancel_close_task()
+
+        return ledger_pool_instance
+
+    async def _initialize(self) -> None:
+        """Initialize the ledger pool."""
+        LOGGER.debug("Beginning pool initialization")
+        if self._init_config:
+            LOGGER.debug("Creating pool config with genesis transactions")
+            await self._create_pool_config(self._genesis_txns_cache, recreate=True)
+            self._init_config = False
+        LOGGER.debug("Opening pool connection")
+        await self._open()
+        LOGGER.debug("Pool initialization complete")
+
+    @classmethod
+    async def release_instance(cls, instance: "IndyVdrLedgerPool") -> None:
+        """Release a reference to the instance and possibly remove it from the registry.
+
+        Args:
+            instance: The IndyVdrLedgerPool instance to release.
+        """
+        LOGGER.debug("Beginning instance release process for pool: %s", instance.name)
+
+        config_key = (
+            instance.name,
+            instance.keepalive,
+            instance.cache_duration,
+            instance.genesis_transactions,
+            instance.read_only,
+            instance.socks_proxy,
+        )
+        async with cls._lock:
+            if instance._ref_count <= 0:
+                LOGGER.debug("Reference count is empty, cleaning up instance")
+                await instance._close()
+                del cls._instances[config_key]
+                LOGGER.debug(
+                    "Successfully removed IndyVdrLedgerPool instance with name %s",
+                    instance.name,
+                )
+            else:
+                LOGGER.debug(
+                    "Instance %s still has active references: %s",
+                    instance.name,
+                    instance._ref_count,
+                )
 
     @property
     def cfg_path(self) -> Path:
         """Get the path to the configuration file, ensuring it's created."""
-        if not self.cfg_path_cache:
-            self.cfg_path_cache = storage_path("vdr", create=True)
-        return self.cfg_path_cache
+        if not self._cfg_path_cache:
+            LOGGER.debug("Creating configuration path cache")
+            self._cfg_path_cache = storage_path("vdr", create=True)
+            LOGGER.debug("Configuration path set to: %s", self._cfg_path_cache)
+        return self._cfg_path_cache
 
     @property
     def genesis_hash(self) -> str:
         """Get the hash of the configured genesis transactions."""
-        if not self.genesis_hash_cache:
-            self.genesis_hash_cache = _hash_txns(self.genesis_txns)
-        return self.genesis_hash_cache
+        if not self._genesis_hash_cache:
+            LOGGER.debug("Calculating genesis transactions hash")
+            self._genesis_hash_cache = _hash_txns(self.genesis_txns)
+            LOGGER.debug("Genesis hash calculated: %s", self._genesis_hash_cache)
+        return self._genesis_hash_cache
 
     @property
     def genesis_txns(self) -> str:
         """Get the configured genesis transactions."""
-        if not self.genesis_txns_cache:
+        if not self._genesis_txns_cache:
+            LOGGER.debug("Loading genesis transactions from file")
             try:
                 path = self.cfg_path.joinpath(self.name, "genesis")
-                self.genesis_txns_cache = _normalize_txns(open(path).read())
+                LOGGER.debug("Reading genesis file from: %s", path)
+                self._genesis_txns_cache = _normalize_txns(open(path).read())
+                LOGGER.debug("Successfully loaded genesis transactions")
             except FileNotFoundError:
+                LOGGER.error("Pool config '%s' not found", self.name)
                 raise LedgerConfigError("Pool config '%s' not found", self.name) from None
-        return self.genesis_txns_cache
+        return self._genesis_txns_cache
 
-    async def create_pool_config(self, genesis_transactions: str, recreate: bool = False):
+    async def _create_pool_config(
+        self, genesis_transactions: str, recreate: bool = False
+    ) -> None:
         """Create the pool ledger configuration."""
+        LOGGER.debug("Creating pool config for '%s', recreate=%s", self.name, recreate)
 
         cfg_pool = self.cfg_path.joinpath(self.name)
         cfg_pool.mkdir(exist_ok=True)
+        LOGGER.debug("Created pool configuration directory: %s", cfg_pool)
+
         genesis = _normalize_txns(genesis_transactions)
         if not genesis:
+            LOGGER.error("Empty genesis transactions provided")
             raise LedgerConfigError("Empty genesis transactions")
 
         genesis_path = cfg_pool.joinpath("genesis")
         try:
+            LOGGER.debug("Checking existing genesis file: %s", genesis_path)
             cmp_genesis = open(genesis_path).read()
             if _normalize_txns(cmp_genesis) == genesis:
                 LOGGER.debug(
@@ -148,98 +294,165 @@ class IndyVdrLedgerPool:
                 )
                 return
             elif not recreate:
+                LOGGER.error(
+                    "Pool ledger '%s' exists with different genesis transactions",
+                    self.name,
+                )
                 raise LedgerConfigError(
                     f"Pool ledger '{self.name}' exists with "
                     "different genesis transactions"
                 )
         except FileNotFoundError:
+            LOGGER.debug("No existing genesis file found")
             pass
 
         try:
+            LOGGER.debug("Writing genesis transactions to: %s", genesis_path)
             _write_safe(genesis_path, genesis)
         except OSError as err:
+            LOGGER.exception("Error writing genesis transactions", exc_info=err)
             raise LedgerConfigError("Error writing genesis transactions") from err
-        LOGGER.debug("Wrote pool ledger config '%s'", self.name)
+        LOGGER.debug("Successfully wrote pool ledger config '%s'", self.name)
 
-        self.genesis_txns_cache = genesis
+        self._genesis_txns_cache = genesis
 
-    async def open(self):
+    async def _open(self) -> None:
         """Open the pool ledger, creating it if necessary."""
+        LOGGER.debug("Opening pool ledger: %s", self.name)
 
-        if self.init_config:
-            await self.create_pool_config(self.genesis_txns_cache, recreate=True)
-            self.init_config = False
+        if self._init_config:
+            LOGGER.debug("Initializing pool config with genesis transactions")
+            await self._create_pool_config(self._genesis_txns_cache, recreate=True)
+            self._init_config = False
 
         genesis_hash = self.genesis_hash
+        LOGGER.debug("Using genesis hash: %s", genesis_hash)
         cfg_pool = self.cfg_path.joinpath(self.name)
         cfg_pool.mkdir(exist_ok=True)
 
         cache_path = cfg_pool.joinpath(f"cache-{genesis_hash}")
         try:
+            LOGGER.debug("Attempting to read cached transactions from: %s", cache_path)
             txns = open(cache_path).read()
             cached = True
+            LOGGER.debug("Successfully read cached transactions")
         except FileNotFoundError:
+            LOGGER.debug("No cached transactions found, using genesis transactions")
             txns = self.genesis_txns
             cached = False
 
+        LOGGER.debug("Opening pool with transactions, socks_proxy=%s", self.socks_proxy)
         self.handle = await open_pool(transactions=txns, socks_proxy=self.socks_proxy)
+        LOGGER.debug("Pool opened successfully")
+
         upd_txns = _normalize_txns(await self.handle.get_transactions())
         if not cached or upd_txns != txns:
+            LOGGER.debug("Updating cached transactions")
             try:
                 _write_safe(cache_path, upd_txns)
+                LOGGER.debug("Successfully wrote updated cached transactions")
             except OSError:
                 LOGGER.exception("Error writing cached genesis transactions")
 
-    async def close(self):
+    async def context_open(self) -> None:
+        """Open the ledger if necessary and increase the number of active references."""
+        await self._cancel_close_task()
+        async with self._ref_lock:
+            if not self.handle:
+                LOGGER.debug("Opening the pool ledger")
+                await self._open()
+            self._ref_count += 1
+            LOGGER.debug(
+                "Incremented reference count to %s for instance %s",
+                self._ref_count,
+                self.name,
+            )
+
+    async def _close(self) -> None:
         """Close the pool ledger."""
         if self.handle:
+            LOGGER.debug("Attempting to close pool ledger")
             exc = None
             for attempt in range(3):
                 try:
+                    LOGGER.debug("Close attempt %s/3", attempt + 1)
                     self.handle.close()
                 except VdrError as err:
+                    LOGGER.warning(
+                        "Error closing pool ledger (attempt %s/3): %s",
+                        attempt + 1,
+                        str(err),
+                    )
                     await asyncio.sleep(0.01)
                     exc = err
                     continue
 
                 self.handle = None
                 exc = None
+                LOGGER.debug("Successfully closed pool ledger")
                 break
 
             if exc:
-                LOGGER.exception("Exception when closing pool ledger", exc_info=exc)
-                self.ref_count += 1  # if we are here, we should have self.ref_lock
-                self.close_task = None
+                LOGGER.exception(
+                    "Failed to close pool ledger after 3 attempts", exc_info=exc
+                )
+                self._ref_count += 1  # if we are here, we should have self.ref_lock
+                LOGGER.debug(
+                    "Re-incremented reference count to %s for instance %s",
+                    self._ref_count,
+                    self.name,
+                )
+                self._close_task = None
                 raise LedgerError("Exception when closing pool ledger") from exc
 
-    async def context_open(self):
-        """Open the ledger if necessary and increase the number of active references."""
-        async with self.ref_lock:
-            if self.close_task:
-                self.close_task.cancel()
-            if not self.handle:
-                LOGGER.debug("Opening the pool ledger")
-                await self.open()
-            self.ref_count += 1
-
-    async def context_close(self):
+    async def context_close(self) -> None:
         """Release the reference and schedule closing of the pool ledger."""
+        LOGGER.debug("Context close called for pool %s", self.name)
 
-        async def closer(timeout: int):
+        async def _keepalive_closer(timeout: int) -> None:
             """Close the pool ledger after a timeout."""
-            await asyncio.sleep(timeout)
-            async with self.ref_lock:
-                if not self.ref_count:
-                    LOGGER.debug("Closing pool ledger after timeout")
-                    await self.close()
+            try:
+                LOGGER.debug(
+                    "Coroutine will sleep for %d seconds before closing the pool.",
+                    timeout,
+                )
+                await asyncio.sleep(timeout)
 
-        async with self.ref_lock:
-            self.ref_count -= 1
-            if not self.ref_count:
+                await IndyVdrLedgerPool.release_instance(self)
+            except Exception as e:
+                LOGGER.error(
+                    "Exception occurred in closer coroutine during pool closure: %s",
+                    e,
+                )
+
+        async with self._ref_lock:
+            self._ref_count -= 1
+            LOGGER.debug(
+                "Decremented ref_count to %d for instance %s",
+                self._ref_count,
+                self.name,
+            )
+            if self._ref_count <= 0:
                 if self.keepalive:
-                    self.close_task = asyncio.ensure_future(closer(self.keepalive))
+                    LOGGER.debug(
+                        "Scheduling closer coroutine with keepalive=%s",
+                        self.keepalive,
+                    )
+                    self._close_task = asyncio.create_task(
+                        _keepalive_closer(self.keepalive)
+                    )
                 else:
-                    await self.close()
+                    LOGGER.debug(
+                        "No keepalive set. Proceeding to close the pool immediately."
+                    )
+                    await IndyVdrLedgerPool.release_instance(self)
+
+    async def _cancel_close_task(self) -> None:
+        """Cancel any pending close task."""
+        async with self._ref_lock:
+            if self._close_task:
+                self._close_task.cancel()
+                self._close_task = None
 
 
 class IndyVdrLedger(BaseLedger):

@@ -63,17 +63,19 @@ class TestMultiIndyVDRLedgerManager(IsolatedAsyncioTestCase):
         self.context.injector.bind_instance(BaseResponder, self.responder)
         self.production_ledger = OrderedDict()
         self.non_production_ledger = OrderedDict()
-        test_prod_ledger = IndyVdrLedger(IndyVdrLedgerPool("test_prod_1"), self.profile)
+        test_prod_ledger = IndyVdrLedger(
+            await IndyVdrLedgerPool.get_or_create(name="test_prod_1"), self.profile
+        )
         writable_ledgers = set()
         self.production_ledger["test_prod_1"] = test_prod_ledger
         self.production_ledger["test_prod_2"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_prod_2"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_prod_2"), self.profile
         )
         self.non_production_ledger["test_non_prod_1"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_non_prod_1"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_non_prod_1"), self.profile
         )
         self.non_production_ledger["test_non_prod_2"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_non_prod_2"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_non_prod_2"), self.profile
         )
         writable_ledgers.add("test_prod_1")
         writable_ledgers.add("test_prod_2")
@@ -195,10 +197,10 @@ class TestMultiIndyVDRLedgerManager(IsolatedAsyncioTestCase):
     ):
         self.non_production_ledger = OrderedDict()
         self.non_production_ledger["test_non_prod_1"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_non_prod_1"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_non_prod_1"), self.profile
         )
         self.non_production_ledger["test_non_prod_2"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_non_prod_2"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_non_prod_2"), self.profile
         )
         self.manager = MultiIndyVDRLedgerManager(
             self.profile,
@@ -387,10 +389,10 @@ class TestMultiIndyVDRLedgerManager(IsolatedAsyncioTestCase):
     ):
         self.non_production_ledger = OrderedDict()
         self.non_production_ledger["test_non_prod_1"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_non_prod_1"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_non_prod_1"), self.profile
         )
         self.non_production_ledger["test_non_prod_2"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_non_prod_2"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_non_prod_2"), self.profile
         )
         self.manager = MultiIndyVDRLedgerManager(
             self.profile,
@@ -420,10 +422,10 @@ class TestMultiIndyVDRLedgerManager(IsolatedAsyncioTestCase):
     ):
         self.non_production_ledger = OrderedDict()
         self.non_production_ledger["test_non_prod_1"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_non_prod_1"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_non_prod_1"), self.profile
         )
         self.non_production_ledger["test_non_prod_2"] = IndyVdrLedger(
-            IndyVdrLedgerPool("test_non_prod_2"), self.profile
+            await IndyVdrLedgerPool.get_or_create(name="test_non_prod_2"), self.profile
         )
         self.manager = MultiIndyVDRLedgerManager(
             self.profile,
