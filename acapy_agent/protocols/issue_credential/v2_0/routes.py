@@ -1,7 +1,8 @@
 """Credential exchange admin routes."""
 
-import logging
 from json.decoder import JSONDecodeError
+import logging
+import re
 from typing import Mapping, Optional
 
 from aiohttp import web
@@ -14,11 +15,13 @@ from aiohttp_apispec import (
 )
 from marshmallow import ValidationError, fields, validate, validates_schema
 
+from . import problem_report_for_record, report_problem
 from ....admin.decorators.auth import tenant_authentication
 from ....admin.request_context import AdminRequestContext
 from ....anoncreds.holder import AnonCredsHolderError
 from ....anoncreds.issuer import AnonCredsIssuerError
 from ....connections.models.conn_record import ConnRecord
+from ....core.event_bus import EventBus, EventWithMetadata
 from ....core.profile import Profile
 from ....indy.holder import IndyHolderError
 from ....indy.issuer import IndyIssuerError
@@ -45,12 +48,12 @@ from ....messaging.valid import (
     UUID4_EXAMPLE,
     UUID4_VALIDATE,
 )
+from ....revocation.models.issuer_cred_rev_record import IssuerCredRevRecord
 from ....storage.error import StorageError, StorageNotFoundError
 from ....utils.tracing import AdminAPIMessageTracingSchema, get_timer, trace_event
 from ....vc.ld_proofs.error import LinkedDataProofException
 from ....wallet.util import default_did_from_verkey
 from ...out_of_band.v1_0.models.oob_record import OobRecord
-from . import problem_report_for_record, report_problem
 from .formats.handler import V20CredFormatError
 from .formats.ld_proof.models.cred_detail import LDProofVCDetailSchema
 from .manager import V20CredManager, V20CredManagerError
@@ -1858,3 +1861,34 @@ def post_process_routes(app: web.Application):
             "externalDocs": {"description": "Specification", "url": SPEC_URI},
         }
     )
+
+
+def register_events(bus: EventBus):
+    """Register event listeners."""
+    bus.subscribe(re.compile(r"^acapy::cred-revoked$"), cred_revoked)
+
+
+async def cred_revoked(profile: Profile, event: EventWithMetadata):
+    """Handle cred revoked event."""
+    assert isinstance(event.payload, IssuerCredRevRecord)
+    rev_rec: IssuerCredRevRecord = event.payload
+
+    if rev_rec.cred_ex_id is None:
+        return
+
+    if (
+        rev_rec.cred_ex_version
+        and rev_rec.cred_ex_version != IssuerCredRevRecord.VERSION_2
+    ):
+        return
+
+    async with profile.transaction() as txn:
+        try:
+            cred_ex_record = await V20CredExRecord.retrieve_by_id(
+                txn, rev_rec.cred_ex_id, for_update=True
+            )
+            cred_ex_record.state = V20CredExRecord.STATE_CREDENTIAL_REVOKED
+            await cred_ex_record.save(txn, reason="revoke credential")
+            await txn.commit()
+        except StorageNotFoundError:
+            pass

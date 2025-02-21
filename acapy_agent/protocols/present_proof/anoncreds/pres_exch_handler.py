@@ -3,27 +3,34 @@
 import json
 import logging
 import time
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Protocol, Tuple
 
 from ....anoncreds.holder import AnonCredsHolder, AnonCredsHolderError
 from ....anoncreds.models.credential_definition import CredDef
 from ....anoncreds.models.revocation import RevRegDef
 from ....anoncreds.models.schema import AnonCredsSchema
-from ....anoncreds.models.utils import extract_non_revocation_intervals_from_proof_request
+from ....anoncreds.models.utils import (
+    extract_non_revocation_intervals_from_proof_request,
+)
 from ....anoncreds.registry import AnonCredsRegistry
 from ....anoncreds.revocation import AnonCredsRevocation
 from ....askar.profile_anon import AskarAnoncredsProfile
 from ....core.error import BaseError
 from ....core.profile import Profile
-from ..v1_0.models.presentation_exchange import V10PresentationExchange
-from ..v2_0.messages.pres_format import V20PresFormat
-from ..v2_0.models.pres_exchange import V20PresExRecord
 
 LOGGER = logging.getLogger(__name__)
 
 
 class AnonCredsPresExchHandlerError(BaseError):
     """Base class for Anoncreds Presentation Exchange related errors."""
+
+
+class AnonCredsProofRequestContainer(Protocol):
+    """Protocol for a class that contains an AC Proof Request."""
+
+    def get_ac_proof_request(self) -> dict:
+        """Retrieve proof request object."""
+        ...
 
 
 class AnonCredsPresExchHandler:
@@ -37,18 +44,6 @@ class AnonCredsPresExchHandler:
         super().__init__()
         self._profile = profile
         self.holder = AnonCredsHolder(profile)
-
-    def _extract_proof_request(self, pres_ex_record):
-        if isinstance(pres_ex_record, V20PresExRecord):
-            return pres_ex_record.pres_request.attachment(
-                V20PresFormat.Format.ANONCREDS
-            ) or pres_ex_record.pres_request.attachment(V20PresFormat.Format.INDY)
-        elif isinstance(pres_ex_record, V10PresentationExchange):
-            return pres_ex_record._presentation_request.ser
-
-        raise TypeError(
-            "pres_ex_record must be V10PresentationExchange or V20PresExRecord"
-        )
 
     def _get_requested_referents(
         self,
@@ -229,7 +224,7 @@ class AnonCredsPresExchHandler:
 
     async def return_presentation(
         self,
-        pres_ex_record: Union[V10PresentationExchange, V20PresExRecord],
+        pres_ex_record: AnonCredsProofRequestContainer,
         requested_credentials: Optional[dict] = None,
     ) -> dict:
         """Return Anoncreds proof request as dict."""
@@ -245,7 +240,7 @@ class AnonCredsPresExchHandler:
             )
 
         requested_credentials = requested_credentials or {}
-        proof_request = self._extract_proof_request(pres_ex_record)
+        proof_request = pres_ex_record.get_ac_proof_request()
         non_revoc_intervals = extract_non_revocation_intervals_from_proof_request(
             proof_request
         )

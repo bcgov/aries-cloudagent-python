@@ -57,7 +57,7 @@ class V20PresRequest(AgentMessage):
             list(request_presentations_attach) if request_presentations_attach else []
         )
 
-    def attachment(self, fmt: V20PresFormat.Format = None) -> dict:
+    def attachment(self, fmt: V20PresFormat.Format | None = None) -> dict | None:
         """Return attached presentation request item.
 
         Args:

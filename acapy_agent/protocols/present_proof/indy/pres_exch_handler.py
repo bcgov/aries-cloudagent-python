@@ -3,7 +3,7 @@
 import json
 import logging
 import time
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 from ....core.error import BaseError
 from ....core.profile import Profile
@@ -16,9 +16,7 @@ from ....ledger.multiple_ledger.ledger_requests_executor import (
 )
 from ....multitenant.base import BaseMultitenantManager
 from ....revocation.models.revocation_registry import RevocationRegistry
-from ..v1_0.models.presentation_exchange import V10PresentationExchange
-from ..v2_0.messages.pres_format import V20PresFormat
-from ..v2_0.models.pres_exchange import V20PresExRecord
+from ..anoncreds.pres_exch_handler import AnonCredsProofRequestContainer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +38,7 @@ class IndyPresExchHandler:
 
     async def return_presentation(
         self,
-        pres_ex_record: Union[V10PresentationExchange, V20PresExRecord],
+        pres_ex_record: AnonCredsProofRequestContainer,
         requested_credentials: Optional[dict] = None,
     ) -> dict:
         """Return Indy proof request as dict."""
@@ -51,19 +49,8 @@ class IndyPresExchHandler:
 
         # extract credential ids and non_revoked
         requested_referents = {}
-        if isinstance(pres_ex_record, V20PresExRecord):
-            proof_request = pres_ex_record.pres_request.attachment(
-                V20PresFormat.Format.INDY
-            )
-            # If indy filter fails try anoncreds filter format. This is for a
-            # non-anoncreds agent that gets a anoncreds format proof request and
-            # should removed when indy format is fully retired.
-            if not proof_request:
-                proof_request = pres_ex_record.pres_request.attachment(
-                    V20PresFormat.Format.ANONCREDS
-                )
-        elif isinstance(pres_ex_record, V10PresentationExchange):
-            proof_request = pres_ex_record._presentation_request.ser
+        proof_request = pres_ex_record.get_ac_proof_request()
+
         non_revoc_intervals = indy_proof_req2non_revoc_intervals(proof_request)
         attr_creds = requested_credentials.get("requested_attributes", {})
         req_attrs = proof_request.get("requested_attributes", {})
