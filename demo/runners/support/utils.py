@@ -7,7 +7,6 @@ from timeit import default_timer
 import prompt_toolkit
 import pygments
 from prompt_toolkit.application import run_in_terminal
-from prompt_toolkit.eventloop.defaults import use_asyncio_event_loop
 from prompt_toolkit.formatted_text import FormattedText, PygmentsTokens
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.shortcuts import ProgressBar
@@ -142,15 +141,7 @@ def flatten(args):
             yield arg
 
 
-def prompt_init():
-    if hasattr(prompt_init, "_called"):
-        return
-    prompt_init._called = True
-    use_asyncio_event_loop()
-
-
 async def prompt(*args, **kwargs):
-    prompt_init()
     with patch_stdout():
         try:
             while True:

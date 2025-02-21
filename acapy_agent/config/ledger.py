@@ -8,7 +8,6 @@ from typing import Optional
 
 import markdown
 import prompt_toolkit
-from prompt_toolkit.eventloop.defaults import use_asyncio_event_loop
 from prompt_toolkit.formatted_text import HTML
 from uuid_utils import uuid4
 
@@ -210,9 +209,6 @@ async def select_aml_tty(taa_info, provision: bool = False) -> Optional[str]:
         + "</strong>\n\n"
         + taa_html
     )
-
-    # setup for prompt_toolkit
-    use_asyncio_event_loop()
 
     prompt_toolkit.print_formatted_text(HTML(taa_html))
 
