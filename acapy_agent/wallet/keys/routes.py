@@ -3,7 +3,7 @@
 import logging
 
 from aiohttp import web
-from aiohttp_apispec import docs, request_schema, response_schema
+from aiohttp_apispec import docs, request_schema, response_schema, querystring_schema
 from marshmallow import fields
 
 from ...admin.decorators.auth import tenant_authentication
@@ -13,6 +13,8 @@ from .manager import MultikeyManager, MultikeyManagerError, DEFAULT_ALG
 from ...wallet.error import WalletDuplicateError, WalletNotFoundError
 
 LOGGER = logging.getLogger(__name__)
+
+GENERIC_KID_EXAMPLE = "did:web:example.com#key-01"
 
 
 class CreateKeyRequestSchema(OpenAPISchema):
@@ -43,7 +45,7 @@ class CreateKeyRequestSchema(OpenAPISchema):
             "description": (
                 "Optional kid to bind to the keypair, such as a verificationMethod."
             ),
-            "example": "did:web:example.com#key-01",
+            "example": GENERIC_KID_EXAMPLE,
         },
     )
 
@@ -61,8 +63,26 @@ class CreateKeyResponseSchema(OpenAPISchema):
     kid = fields.Str(
         metadata={
             "description": "The associated kid",
-            "example": "did:web:example.com#key-01",
+            "example": GENERIC_KID_EXAMPLE,
         },
+    )
+
+
+class FetchKeyQueryStringSchema(OpenAPISchema):
+    """Parameters for key request query string."""
+
+    kid = fields.Str(
+        required=True,
+        metadata={"description": "KID of interest", "example": GENERIC_KID_EXAMPLE},
+    )
+
+
+class DeleteKidQueryStringSchema(OpenAPISchema):
+    """Parameters for kid delete request query string."""
+
+    kid = fields.Str(
+        required=True,
+        metadata={"description": "KID of interest", "example": GENERIC_KID_EXAMPLE},
     )
 
 
@@ -218,13 +238,66 @@ async def update_key(request: web.BaseRequest):
         return web.json_response({"message": str(err)}, status=400)
 
 
+@docs(tags=["wallet"], summary="Fetch key info.")
+@querystring_schema(FetchKeyQueryStringSchema())
+@response_schema(FetchKeyResponseSchema, 200, description="")
+@tenant_authentication
+async def fetch_key_by_kid(request: web.BaseRequest):
+    """Request handler for fetching a key.
+
+    Args:
+        request: aiohttp request object
+
+    """
+    context: AdminRequestContext = request["context"]
+    filter_kid = request.query.get("kid")
+
+    try:
+        async with context.session() as session:
+            key_info = await MultikeyManager(session).get_key_by_kid(kid=filter_kid)
+        return web.json_response(
+            key_info,
+            status=200,
+        )
+
+    except (MultikeyManagerError, WalletDuplicateError, WalletNotFoundError) as err:
+        return web.json_response({"message": str(err)}, status=400)
+
+
+@docs(tags=["wallet"], summary="Fetch key info.")
+@querystring_schema(DeleteKidQueryStringSchema())
+@tenant_authentication
+async def remove_kid(request: web.BaseRequest):
+    """Request handler for fetching a key.
+
+    Args:
+        request: aiohttp request object
+
+    """
+    context: AdminRequestContext = request["context"]
+    filter_kid = request.query.get("kid")
+
+    try:
+        async with context.session() as session:
+            key_info = await MultikeyManager(session).get_key_by_kid(kid=filter_kid)
+        return web.json_response(
+            key_info,
+            status=200,
+        )
+
+    except (MultikeyManagerError, WalletDuplicateError, WalletNotFoundError) as err:
+        return web.json_response({"message": str(err)}, status=400)
+
+
 async def register(app: web.Application):
     """Register routes."""
 
     app.add_routes(
         [
-            web.get("/wallet/keys/{multikey}", fetch_key, allow_head=False),
             web.post("/wallet/keys", create_key),
             web.put("/wallet/keys", update_key),
+            web.get("/wallet/keys/{multikey}", fetch_key, allow_head=False),
+            web.get("/wallet/keys", fetch_key_by_kid, allow_head=False),
+            web.delete("/wallet/keys", remove_kid, allow_head=False),
         ]
     )

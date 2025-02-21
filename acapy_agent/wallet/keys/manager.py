@@ -2,7 +2,7 @@
 
 from ...core.profile import ProfileSession
 from ..base import BaseWallet
-from ..key_type import ED25519, P256, KeyType
+from ..key_type import ED25519, P256, BLS12381G1G2, KeyType
 from ..util import b58_to_bytes, bytes_to_b58
 from ...utils.multiformats import multibase
 from ...wallet.error import WalletNotFoundError
@@ -20,6 +20,12 @@ ALG_MAPPINGS = {
         "key_type": P256,
         "multikey_prefix": "zDn",
         "prefix_hex": "8024",
+        "prefix_length": 2,
+    },
+    "bls12381g2": {
+        "key_type": BLS12381G1G2,
+        "multikey_prefix": "zUC7",
+        "prefix_hex": "eb01",
         "prefix_length": 2,
     },
 }

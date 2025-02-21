@@ -1,6 +1,6 @@
 """KeyInfo, DIDInfo."""
 
-from typing import NamedTuple
+from typing import NamedTuple, Union, List
 
 from .did_method import DIDMethod
 from .key_type import KeyType
@@ -14,7 +14,7 @@ class KeyInfo(NamedTuple):
     verkey: str
     metadata: dict
     key_type: KeyType
-    kid: str = None
+    kid: Union[List[str], str] = None
 
 
 DIDInfo = NamedTuple(
