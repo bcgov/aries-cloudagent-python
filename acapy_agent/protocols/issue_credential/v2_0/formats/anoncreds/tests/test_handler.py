@@ -51,7 +51,7 @@ from .. import handler as test_module
 from ..handler import LOGGER as ANONCREDS_LOGGER
 from ..handler import AnonCredsCredFormatHandler
 
-TEST_DID = "LjgpST2rjsoxYegQDRm7EL"
+TEST_DID = "did:sov:LjgpST2rjsoxYegQDRm7EL"
 SCHEMA_NAME = "bc-reg"
 SCHEMA_TXN = 12
 SCHEMA_ID = f"{TEST_DID}:2:{SCHEMA_NAME}:1.0"

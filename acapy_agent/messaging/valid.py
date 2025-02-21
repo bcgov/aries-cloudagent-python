@@ -467,10 +467,10 @@ class IndyCredDefId(Regexp):
     EXAMPLE = "WgWxqztrNooG92RXvxSTWv:3:CL:20:tag"
     PATTERN = (
         rf"^([{B58}]{{21,22}})"  # issuer DID
-        f":3"  # cred def id marker
-        f":CL"  # sig alg
+        ":3"  # cred def id marker
+        ":CL"  # sig alg
         rf":(([1-9][0-9]*)|([{B58}]{{21,22}}:2:.+:[0-9.]+))"  # schema txn / id
-        f":(.+)?$"  # tag
+        ":(.+)?$"  # tag
     )
 
     def __init__(self):
@@ -485,8 +485,11 @@ class IndyCredDefId(Regexp):
 class AnoncredsCredDefId(Regexp):
     """Validate value against anoncreds credential definition identifier specification."""
 
-    EXAMPLE = "did:(method):3:CL:20:tag"
-    PATTERN = r"^(.+$)"
+    EXAMPLE = "did:method:example:3:CL:12:tag1"
+    PATTERN = (
+        r"^did:(?P<method>[a-zA-Z0-9]+):(?P<did>[a-zA-Z0-9]+):3:"
+        r"CL:(?P<schema_id>\d+):(?P<tag>[a-zA-Z0-9_-]+)$"
+    )
 
     def __init__(self):
         """Initialize the instance."""
@@ -530,8 +533,11 @@ class IndySchemaId(Regexp):
 class AnoncredsSchemaId(Regexp):
     """Validate value against indy schema identifier specification."""
 
-    EXAMPLE = "did:(method):2:schema_name:1.0"
-    PATTERN = r"^(.+$)"
+    EXAMPLE = "did:method:example:2:schema_name:1.0"
+    PATTERN = (
+        r"^did:(?P<method>[a-zA-Z0-9]+):(?P<did>[a-zA-Z0-9]+):2:"
+        r"(?P<schema_name>[a-zA-Z0-9_-]+):(?P<version>[0-9.]+)$"
+    )
 
     def __init__(self):
         """Initialize the instance."""
@@ -550,7 +556,7 @@ class IndyRevRegId(Regexp):
         rf"^([{B58}]{{21,22}}):4:"
         rf"([{B58}]{{21,22}}):3:"
         rf"CL:(([1-9][0-9]*)|([{B58}]{{21,22}}:2:.+:[0-9.]+))(:.+)?:"
-        rf"CL_ACCUM:(.+$)"
+        r"CL_ACCUM:(.+$)"
     )
 
     def __init__(self):
@@ -565,8 +571,12 @@ class IndyRevRegId(Regexp):
 class AnoncredsRevRegId(Regexp):
     """Validate value against anoncreds revocation registry identifier specification."""
 
-    EXAMPLE = "did:(method):4:did:<method>:3:CL:20:tag:CL_ACCUM:0"
-    PATTERN = r"^(.+$)"
+    EXAMPLE = "did:method:example:4:did:method:example:3:CL:20:tag:CL_ACCUM:0"
+    PATTERN = (
+        r"^did:(?P<method1>[a-zA-Z0-9]+):(?P<did1>[a-zA-Z0-9]+):4:"
+        r"did:(?P<method2>[a-zA-Z0-9]+):(?P<did2>[a-zA-Z0-9]+):3:"
+        r"CL:(?P<schema_id>\d+):(?P<tag>[a-zA-Z0-9_-]+):CL_ACCUM:(.+)$"
+    )
 
     def __init__(self):
         """Initialize the instance."""
