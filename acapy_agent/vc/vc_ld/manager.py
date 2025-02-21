@@ -1,5 +1,6 @@
 """Manager for performing Linked Data Proof signatures over JSON-LD formatted W3C VCs."""
 
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Type, Union, cast
 
 from pyld import jsonld
@@ -18,6 +19,8 @@ from ...wallet.did_info import DIDInfo
 from ...wallet.error import WalletNotFoundError
 from ...wallet.key_type import BLS12381G2, ED25519, P256, KeyType
 from ..ld_proofs.constants import (
+    CREDENTIALS_CONTEXT_V1_URL,
+    CREDENTIALS_CONTEXT_V2_URL,
     SECURITY_CONTEXT_BBS_URL,
     SECURITY_CONTEXT_ED25519_2020_URL,
 )
@@ -59,6 +62,10 @@ SUPPORTED_ISSUANCE_PROOF_PURPOSES = {
     CredentialIssuancePurpose.term,
     AuthenticationProofPurpose.term,
 }
+SUPPORTED_V2_ISSUANCE_PROOF_TYPES = [
+    Ed25519Signature2020.signature_type,
+    BbsBlsSignature2020.signature_type,
+]
 SIGNATURE_SUITE_KEY_TYPE_MAPPING: Dict[SignatureTypes, KeyType] = {
     Ed25519Signature2018: ED25519,
     Ed25519Signature2020: ED25519,
@@ -266,6 +273,15 @@ class VcLdpManager:
         holder_did: Optional[str] = None,
     ) -> VerifiableCredential:
         """Prepare a credential for issuance."""
+        # Limit VCDM 2.0 with Ed25519Signature2020
+        if (
+            credential.context_urls[0] == CREDENTIALS_CONTEXT_V2_URL
+            and options.proof_type not in SUPPORTED_V2_ISSUANCE_PROOF_TYPES
+        ):
+            raise VcLdpManagerError(
+                f"Supported VC 2.0 proof types are: {SUPPORTED_V2_ISSUANCE_PROOF_TYPES}."
+            )
+
         # Add BBS context if not present yet
         if (
             options.proof_type == BbsBlsSignature2020.signature_type
@@ -288,6 +304,14 @@ class VcLdpManager:
         # How should this be handled?
         if isinstance(subject, list):
             subject = subject[0]
+
+        if (
+            not credential.issuance_date
+            and credential.context_urls[0] == CREDENTIALS_CONTEXT_V1_URL
+        ):
+            credential.issuance_date = str(
+                datetime.now(timezone.utc).isoformat("T", "seconds")
+            )
 
         if not subject:
             raise VcLdpManagerError("Credential subject is required")

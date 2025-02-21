@@ -1,6 +1,7 @@
 from .bbs_v1 import BBS_V1
 from .citizenship_v1 import CITIZENSHIP_V1
 from .credentials_v1 import CREDENTIALS_V1
+from .credentials_v2 import CREDENTIALS_V2
 from .did_v1 import DID_V1
 from .dif_presentation_submission_v1 import DIF_PRESENTATION_SUBMISSION_V1
 from .ed25519_2020_v1 import ED25519_2020_V1
@@ -23,6 +24,7 @@ __all__ = [
     "ED25519_2020_V1",
     "MULTIKEY_V1",
     "CREDENTIALS_V1",
+    "CREDENTIALS_V2",
     "CITIZENSHIP_V1",
     "VACCINATION_V1",
     "EXAMPLES_V1",
